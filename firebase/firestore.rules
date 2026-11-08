@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// Firestore security rules for AKASHA.
+//
+// Model: one document per user, with per-entity subcollections.
+//   users/{uid}
+//   users/{uid}/{entity}/{recordId}
+//
+// Every rule below is scoped to request.auth.uid, so an authenticated user can
+// only ever read or write their own records. There is no shared collection, no
+// admin backdoor, and no public read path.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Only these entity collections may exist under a user document.
+    function isAllowedEntity(entity) {
+      return entity in [
+        'water_logs',
+        'water_reminders',
+        'medicines',
+        'medicine_logs',
+        'mood_entries',
+        'journal_entries',
+        'gratitude_entries',
+        'breathing_sessions',
+        'reflections',
+        'love_notes'
+      ];
+    }
+
+    // Sanity bounds on incoming records: prevents abuse and junk writes.
+    function isValidRecord() {
+      return request.resource.data.size() < 40
+        && request.resource.data.keys().hasAll(['id', 'updated_at'])
+        && request.resource.data.id is string
+        && request.resource.data.id.size() < 80
+        && request.resource.data.updated_at is int;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid);
+      allow delete: if isOwner(uid);
+
+      match /{entity}/{recordId} {
+        allow read: if isOwner(uid) && isAllowedEntity(entity);
+        allow create: if isOwner(uid)
+          && isAllowedEntity(entity)
+          && isValidRecord();
+        allow update: if isOwner(uid)
+          && isAllowedEntity(entity)
+          && isValidRecord();
+        allow delete: if isOwner(uid) && isAllowedEntity(entity);
+      }
+    }
+
+    // Default deny for anything not explicitly matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,39 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+.idea/
+.vscode/
+.metadata
+coverage/
+*.g.dart.bak
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/.idea/
+android/key.properties
+*.jks
+*.keystore
+android/app/google-services.json
+
+# Firebase / secrets — never commit credentials
+firebase/app/google-services.json
+firebase/service-account*.json
+lib/firebase_options.dart
+.env
+*.env
+env.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.log

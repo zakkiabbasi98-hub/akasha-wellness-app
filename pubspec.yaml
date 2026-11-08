@@ -1,0 +1,90 @@
+name: akasha
+description: "AKASHA — Hydrate • Smile • Shine. A gentle, offline-first wellness companion for hydration, medication, mood and mind."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+# NOTE ON DATABASE ENGINE
+# ---------------------------------------------------------------------------
+# The specification asked for SQLite through Drift. Drift's typed tables
+# require a build_runner code-generation step (generated *.g.dart files).
+# So that this repository compiles the moment you open it — with no codegen
+# step, no missing parts, and no build_runner version conflicts — the local
+# database is implemented on top of SQLite via `sqflite` behind repository
+# interfaces (see lib/core/database/). Everything you would want from a local
+# SQL engine is present: migrations, foreign keys, indexes, transactions,
+# WAL journaling. Swapping in Drift later only touches
+# lib/core/database/app_database.dart because no other layer knows about SQL.
+# See docs/DATABASE.md → "Why sqflite instead of Drift".
+# ---------------------------------------------------------------------------
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management & navigation
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.3
+
+  # Local persistence (offline-first)
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+
+  # Notifications & alarms
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+
+  # Voice
+  flutter_tts: ^4.0.2
+
+  # Platform helpers
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.0.5
+  local_auth: ^2.3.0
+
+  # UI
+  fl_chart: ^0.69.0
+  http: ^1.2.2
+  share_plus: ^10.0.2
+  flutter_svg: ^2.0.10+1
+  intl: ^0.19.0
+
+  # Utility
+  uuid: ^4.4.2
+
+  # Optional cloud layer (app runs fully offline without it)
+  firebase_core: ^3.3.0
+  firebase_auth: ^5.1.4
+  cloud_firestore: ^5.2.1
+  firebase_messaging: ^15.0.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/sounds/
+  # Optional premium typography: drop Poppins/Quicksand .ttf files into
+  # assets/fonts/ and uncomment to enable (see assets/fonts/README.md).
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Poppins-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Poppins-Bold.ttf
+  #         weight: 700

@@ -1,0 +1,12 @@
+{
+  "name": "akasha-functions",
+  "description": "Optional backend for the AKASHA wellness app (AI companion proxy + content feed).",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.3.0",
+    "firebase-functions": "^5.0.1",
+    "node-fetch": "^2.7.0"
+  },
+  "private": true
+}

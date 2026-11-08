@@ -1,0 +1,81 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    // Firebase (optional) — uncomment after docs/FIREBASE_SETUP.md steps 1-3
+    // id "com.google.gms.google-services"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
+def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0"
+
+android {
+    namespace = "com.akasha.wellness"
+    compileSdk = 34
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled = true // required by flutter_local_notifications
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId = "com.akasha.wellness"
+        minSdk = 23          // local_auth + notification permission fallbacks
+        targetSdk = 34       // Android 14
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+        multiDexEnabled = true
+    }
+
+    signingConfigs {
+        // Release signing is read from android/key.properties (never committed).
+        // See docs/BUILD_AND_RELEASE.md
+        if (rootProject.file("key.properties").exists()) {
+            def keystoreProperties = new Properties()
+            rootProject.file("key.properties").withReader("UTF-8") { keystoreProperties.load(it) }
+            release {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Falls back to debug signing so `flutter build apk --release`
+            // works out of the box; configure key.properties before publishing.
+            signingConfig = rootProject.file("key.properties").exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
+}
