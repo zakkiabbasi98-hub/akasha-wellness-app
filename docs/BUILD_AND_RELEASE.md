@@ -198,7 +198,7 @@ build — no manual duplication.
 4. **Health apps declaration:** AKASHA is a *wellness/reminder* app, not a medical
    device. Do not select the medical-device category; do state that it does not
    diagnose or treat. The medication feature is a reminder list, not dosage advice.
-5. **Permissions declaration:** `USE_EXACT_ALARM` and `USE_FULL_SCREEN_INTENT` may
+5. **Permissions declaration:** `USE_FULL_SCREEN_INTENT` may
    require a short justification form on recent Android versions. Explain: alarm
    clock-style reminder app; the user can revoke both, and the app degrades
    gracefully (it never claims otherwise).

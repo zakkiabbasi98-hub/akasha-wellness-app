@@ -149,7 +149,7 @@ line. The app can show you that information; it cannot contact anyone for you.
 |---|---|---|
 | `flutter_local_notifications`, `timezone` | no | reminders |
 | `sqflite` | no | local database |
-| `flutter_tts` | no | speaks reminders using the phone's own engine (text stays on-device) |
+| Android `TextToSpeech` (native, via a Kotlin receiver) | no | speaks reminders using the phone's own engine; the text never leaves the device |
 | `local_auth` | no | fingerprint/PIN gate (biometric data is handled by Android, never by the app) |
 | `permission_handler` | no | asking for permissions |
 | `fl_chart`, `go_router`, `flutter_riverpod`, `intl`, `uuid`, `path_provider`, `share_plus` | no | UI, navigation, state, formatting, IDs, files, sharing the export you created |

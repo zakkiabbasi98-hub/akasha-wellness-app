@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../content/motivation_content.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/user_settings.dart';
@@ -29,8 +28,10 @@ class _VoiceSettingsScreenState extends ConsumerState<VoiceSettingsScreen> {
     _checkTts();
   }
 
+  /// Asks Android whether a TTS engine exists — the same check the reminder
+  /// path uses, so this screen cannot claim speech works when it will not.
   Future<void> _checkTts() async {
-    final available = await ref.read(voiceServiceProvider).init();
+    final available = await ref.read(voicePlanServiceProvider).isAvailable();
     if (mounted) setState(() => _ttsAvailable = available);
   }
 
@@ -91,7 +92,12 @@ class _VoiceSettingsScreenState extends ConsumerState<VoiceSettingsScreen> {
                             onChanged: (value) async {
                               await ref
                                   .read(settingsControllerProvider.notifier)
-                                  .update((s) => s.copyWith(voiceEnabled: value));
+                                  // Reschedule, not just save: this toggle decides
+                                  // whether the native spoken plan is armed, so a
+                                  // plain update() would leave speech on (or off)
+                                  // until something else happened to rebuild.
+                                  .updateAndReschedule(
+                                      (s) => s.copyWith(voiceEnabled: value));
                             },
                             title: const Text(
                               'Speak my reminders',
@@ -114,18 +120,18 @@ class _VoiceSettingsScreenState extends ConsumerState<VoiceSettingsScreen> {
                               padding: const EdgeInsets.only(bottom: 7),
                               child: GestureDetector(
                                 onTap: () async {
+                                  // Choosing a persona must reach the native
+                                  // spoken plan, which only happens on a
+                                  // reschedule.
                                   await ref
                                       .read(settingsControllerProvider.notifier)
-                                      .update((s) => s.copyWith(
+                                      .updateAndReschedule((s) => s.copyWith(
                                             voiceProfile: profile,
                                             voiceEnabled:
                                                 profile != VoiceProfile.disabled,
                                             voicePitch: profile.pitch,
                                             voiceRate: profile.rate,
                                           ));
-                                  await ref
-                                      .read(voiceServiceProvider)
-                                      .applyProfile(profile);
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -286,15 +292,45 @@ class _VoiceSettingsScreenState extends ConsumerState<VoiceSettingsScreen> {
     );
   }
 
+  /// Speaks the preview through the **native** engine — the same one that will
+  /// speak a real reminder. Using the Dart engine here would demo a voice the
+  /// reminder never uses.
   Future<void> _preview() async {
     setState(() => _previewing = true);
-    final settings = ref.read(settingsControllerProvider).valueOrNull;
-    final line = kWaterVoiceLines.first;
-    await ref.read(voiceServiceProvider).speak(
-          line,
-          profile: settings?.voiceProfile,
-        );
-    await Future.delayed(const Duration(seconds: 4));
-    if (mounted) setState(() => _previewing = false);
+    try {
+      final settings = ref.read(settingsControllerProvider).valueOrNull ??
+          await ref.read(settingsProvider.future);
+      final service = ref.read(voicePlanServiceProvider);
+
+      if (!await service.isAvailable()) {
+        if (mounted) {
+          showAkashaToast(
+            context,
+            'This phone has no text-to-speech engine installed, so reminders '
+            'cannot be spoken. They will still appear as notifications.',
+            icon: Icons.volume_off_rounded,
+            color: AppColors.warning,
+          );
+        }
+        return;
+      }
+      if (await service.isSuppressed()) {
+        if (mounted) {
+          showAkashaToast(
+            context,
+            'The phone is muted or in Do Not Disturb, so speech is suppressed '
+            'right now. Turn the volume up to hear this.',
+            icon: Icons.volume_mute_rounded,
+            color: AppColors.warning,
+          );
+        }
+        return;
+      }
+      await service.preview(settings);
+      // Give the native engine time to finish before re-enabling the button.
+      await Future.delayed(const Duration(seconds: 4));
+    } finally {
+      if (mounted) setState(() => _previewing = false);
+    }
   }
 }

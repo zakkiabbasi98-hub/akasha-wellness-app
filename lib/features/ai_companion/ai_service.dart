@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -24,6 +25,14 @@ enum SafetyFlag { none, selfHarm, crisis }
 /// consented, the companion degrades to a fully local, rule-based reflective
 /// responder. That keeps the feature honest (never pretending to be a
 /// therapist) and keeps the app usable offline.
+///
+/// Authentication (repair R4)
+/// --------------------------
+/// The deployed function requires a verified Firebase ID token and rejects
+/// anonymous callers. This client therefore attaches a **fresh** token to every
+/// request. If the user is not signed in at all, the request is never made —
+/// the local responder answers instead, which is both cheaper and more honest
+/// than sending a request that is guaranteed to 401.
 class AiCompanionService {
   AiCompanionService({this.endpointOverride});
 
@@ -35,6 +44,21 @@ class AiCompanionService {
   String get endpoint => endpointOverride ?? _endpointFromEnv;
 
   bool get isConfigured => endpoint.trim().isNotEmpty;
+
+  /// Supplies the current Firebase ID token, or null when nobody is signed in.
+  ///
+  /// Wrapped because `FirebaseAuth.instance` throws if Firebase was never
+  /// initialised — and Firebase is genuinely optional in this app.
+  Future<String?> _idToken() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+      return await user.getIdToken();
+    } catch (e) {
+      debugPrint('AKASHA: no Firebase auth available ($e)');
+      return null;
+    }
+  }
 
   static const String systemPreamble = '''
 You are a warm, gentle wellness companion inside a personal app for a young
@@ -99,11 +123,28 @@ local emergency services right now, and stop giving reflective exercises.
       );
     }
 
+    // The endpoint requires an authenticated caller. Sending an unauthenticated
+    // request would be a guaranteed 401 that still costs a round trip, so fall
+    // back locally instead.
+    final token = await _idToken();
+    if (token == null) {
+      return AiReply(
+        text: localReflection(message),
+        safety: SafetyFlag.none,
+        fromBackend: false,
+        note: 'Sign in to Cloud backup to chat with the companion. '
+            'Until then, here is a simpler reflection.',
+      );
+    }
+
     try {
       final response = await http
           .post(
             Uri.parse(endpoint),
-            headers: const {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
             body: jsonEncode({
               'message': message,
               'history': history,
@@ -112,6 +153,26 @@ local emergency services right now, and stop giving reflective exercises.
           )
           .timeout(const Duration(seconds: 25));
 
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        // Token expired or App Check rejected the build. Say so; do not imply
+        // the server is merely offline.
+        return AiReply(
+          text: localReflection(message),
+          safety: SafetyFlag.none,
+          fromBackend: false,
+          note: 'The companion needs a fresh sign-in. Here is a simpler '
+              'reflection meanwhile.',
+        );
+      }
+      if (response.statusCode == 429) {
+        return AiReply(
+          text: localReflection(message),
+          safety: SafetyFlag.none,
+          fromBackend: false,
+          note: 'The companion is resting for a moment (too many messages). '
+              'Here is a simpler reflection meanwhile.',
+        );
+      }
       if (response.statusCode != 200) {
         return AiReply(
           text: localReflection(message),

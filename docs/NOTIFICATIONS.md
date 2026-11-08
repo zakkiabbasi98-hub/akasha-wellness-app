@@ -11,7 +11,7 @@ idempotent rebuild.
 ```
             ┌──────────────────────── ReminderScheduler ───────────────────────┐
             │  reads settings + reminders + medicines + schedules + notes      │
-            │  cancels everything, then re-materialises a 7-day horizon        │
+            │  cancels everything, then re-materialises a 5-day horizon        │
             └───────────────┬──────────────────────────────────────────────────┘
                             │ zonedSchedule(exact or inexact)
                     ┌───────▼────────┐
@@ -89,7 +89,10 @@ three independent alarms and a weekday-only medicine never fires on a Sunday.
 
 ## 4. Scheduling window
 
-* `AppConstants.scheduleHorizonDays = 7` — a rolling week is materialised.
+* `AppConstants.scheduleHorizonDays = 5` — a rolling five days is
+  materialised. Five, not seven, because medicine alarms dominate the budget:
+  4 medicines × 3 times × 5 days = 60, and the hard cap is
+  `AppConstants.maxPendingAlarms = 400`.
 * `zonedSchedule` with `DateTimeComponents.time` semantics is **not** used; every
   slot is an individual absolute instant in the device's timezone, which is why
   quiet-hours suppression and DST are handled explicitly rather than hoped for.
@@ -208,7 +211,7 @@ rebuild so a change is never applied twice.
 | Permission | Requested when | If denied |
 |---|---|---|
 | `POST_NOTIFICATIONS` (33+) | first reminder flow, and Diagnostics | no reminders at all; the app is still fully usable |
-| `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` | Diagnostics "Fix" | reminders become inexact |
+| `SCHEDULE_EXACT_ALARM` | Diagnostics "Fix" | reminders become inexact; each schedule call retries once inexactly instead of being lost |
 | `USE_FULL_SCREEN_INTENT` | settings toggle | heads-up instead of full screen |
 | `RECEIVE_BOOT_COMPLETED` | manifest only | reminders lost after reboot until the app opens |
 | `VIBRATE` | manifest only | silent feedback |
@@ -247,3 +250,110 @@ around with tricks that break policy.
    slot, press **Later** → reopen → the snooze is queued and re-armed.
 7. Reboot the phone → confirm reminders still fire.
 8. Change timezone → reopen the app → Diagnostics shows the rebuilt horizon.
+
+---
+
+## 8. Notification ids (rewritten in the repair pass)
+
+Every pending alarm needs a stable positive 32-bit id. Two properties matter,
+and the original implementation only had one:
+
+1. **Stable** — the same alarm must get the same id on every rebuild, or
+   re-scheduling creates a duplicate instead of replacing.
+2. **Unique per occurrence** — the id must identify *this day's* 09:00, not
+   09:00 in general.
+
+The original code used `waterBase + minuteOfDay`, satisfying (1) completely and
+(2) not at all. Because the scheduler materialises a multi-day horizon, the same
+id was written once per day and Android replaced the prior alarm each time:
+**96 of 112 alarms (86 %) were destroyed**, and the survivors all landed on the
+last day of the horizon.
+
+### Bands
+
+| Kind | Base | Scheme | Unique by |
+|---|---|---|---|
+| Water | 100 000 000 | `base + dayIndex*2048 + minute` | construction |
+| Medicine | 300 000 000 | `base + fnv30(logId) % 500 000 000` | hashing |
+| Encouragement | 900 000 000 | `base + dayIndex*2048 + minute` | construction |
+| Love notes | 950 000 000 | `base + dayIndex*2048 + minute + noteOffset` | construction |
+| Snooze | 1 000 000 000 | `base + fnv30(snoozeId) % 100 000 000` | hashing |
+| Daily summary | 1 200 000 001 | single id | — |
+
+`dayIndex` is the **UTC** calendar day, so a DST transition cannot shift an id
+and silently duplicate an alarm. `2048` is the day stride and is larger than the
+1440 possible minutes, which is what makes the structural bands collision-proof.
+
+For the hashed bands, the exact birthday probability at a deliberately
+pessimistic 180 pending medicine alarms is **0.0032 % (≈1 in 31 000)**, versus
+**7.74 % (≈1 in 13)** for the previous 200 000-wide band.
+
+---
+
+## 9. Notification actions with the app closed
+
+`flutter_local_notifications` delivers notification button presses to a
+**separate isolate** when the app is not running. Nothing from the UI isolate
+exists there: no Riverpod container, no initialised services, no static fields
+set during `main()`.
+
+The app therefore handles the action **twice-safely**:
+
+```
+tap ──► onBackgroundNotificationResponse (headless isolate)
+              │
+              ├─ 1. open its own SQLite connection
+              ├─ 2. claim the dedupe key  ──┐  one transaction
+              ├─ 3. write the domain row  ──┘
+              └─ 4. on any failure: append to a JSONL queue
+                                              │
+app launch / resume ──► PendingActionQueue.replay() ──┘ (idempotent)
+```
+
+* **Dedupe key:** `kind|refId|slot|value|actionId|day`, stored as the primary key
+  of `notification_actions`. Claimed with `INSERT OR IGNORE` inside the same
+  transaction as the write, so a repeated delivery affects 0 rows and returns.
+* **Atomic:** millilitres, the claim and the history row commit together.
+* **Durable:** a failure leaves the event queued, never dropped.
+* **Day-correct:** the payload carries `dayKey`, so answering a 23:55 reminder at
+  00:05 is booked against the day it belonged to.
+
+The same `ActionExecutor` runs in the UI isolate, the headless isolate and the
+unit tests — one code path, not three.
+
+### Android limitations that no app can fix
+
+* **Force-stop** cancels every alarm and blocks delivery until the user opens the
+  app again. The app says this in Diagnostics rather than pretending otherwise.
+* **Doze** may delay the headless isolate by minutes; the queue covers it and the
+  total catches up on next open.
+* **Do Not Disturb / silent mode** suppress sound and speech. Never overridden.
+
+---
+
+## 10. Spoken reminders
+
+Speech is **native** (`VoiceReminderScheduler.kt` + `VoiceReminderReceiver.kt`),
+not Dart, because a `flutter_tts` engine lives inside the Flutter engine and
+cannot speak after Android terminates the process — exactly the case that
+matters.
+
+* Dart hands down a *plan* (one entry per enabled water slot: id, minute, line,
+  voice key, pitch, rate) whenever the schedule is rebuilt.
+* Kotlin arms the next occurrence of each slot and **re-arms itself daily**, so
+  speech keeps working for weeks without the app being opened.
+* The `TextToSpeech` engine is created per firing and released on `onDone`
+  (30 s hard timeout for vendor engines that never call back).
+* Speech uses the **alarm** audio stream, and is suppressed when the phone is
+  muted or in Do Not Disturb — respecting the user's setting rather than
+  overriding it.
+* If the phone has no TTS engine, `isSpeechAvailable()` reports it and Voice
+  settings says so in plain words. The notification still appears.
+
+| App state | Speech | Notification |
+|---|---|---|
+| Foreground | ✅ | ✅ |
+| Backgrounded | ✅ | ✅ |
+| Terminated / locked | ✅ (native alarm) | ✅ |
+| Force-stopped by user | ❌ | ❌ (Android blocks both) |
+| Silent / DND | ❌ (by design) | ✅ (silently) |

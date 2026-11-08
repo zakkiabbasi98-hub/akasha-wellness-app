@@ -41,6 +41,11 @@ flutter run --profile                 # performance profiling on a device
 | `test/unit/date_and_settings_test.dart` | 19 | Day keys, Monday-based weeks, month bounds (incl. leap February), millis round-trip, `minutesToLabel` wrapping, time parsing, quiet hours both same-day and overnight, "identical start/end means no quiet window", `lastNDays`, greeting buckets, constant values (540 / 0 / 60 / 16 / glass sizes), validator bounds |
 | `test/unit/models_test.dart` | 23 | Row round-trips for settings/logs/medicines/journal/mood, `glassesTarget` rounding (incl. zero target), dirty-on-write, theme + voice + source + status key round-trips, weekday/date-range due rules, **"an unanswered dose is never implicitly taken"**, `isAnswered` for terminal statuses only, `scheduledAt` composition, gratitude `items` skipping empty slots, `MoodType.fromKey('nonsense')` → `null` |
 | `test/unit/motivation_content_test.dart` | 8 | ≥100 messages with no empty category, every category present, no duplicates, **no shaming language** (banned-phrase scan), ≤160 chars, water/medicine notification copy well formed, crisis text points to a real person and emergency help |
+| `test/unit/notification_id_test.dart` | 16 | One id per occurrence: same clock time on two days must differ; 112 alarms over a 7-day horizon stay 112 distinct; midnight valid; DST-proof; bands never overlap; every id a safe positive 32-bit int |
+| `test/unit/notification_planner_test.dart` | 27 | The scheduling contract — multi-day materialisation, midnight inclusive, past occurrences dropped, quiet hours (water vs medicine asymmetry), weekday courses, ended courses, alarm budget |
+| `test/unit/notification_action_test.dart` | 13 | Payload round-trip incl. legacy payloads, dedupe-key identity across repeated delivery, robust decoding of garbage |
+| `test/unit/notification_ledger_test.dart` | 10 | **Real SQLite via `sqflite_common_ffi`**: schema executes, ten taps log one glass, failed transaction rolls back, v1→v2 migration keeps every record |
+| `test/unit/spoken_reminder_test.dart` | 15 | Voice setting reaches the scheduler, deterministic rotation, profile gating, master toggle, copy safety |
 | `test/unit/routing_test.dart` | 6 | Every `Routes.*` constant exists in the real route tree; no duplicate or malformed paths; settings stay under Profile and reports/calendar/history under Home (this suite caught **seven dead navigation tiles**) |
 | `test/unit/sync_logic_test.dart` | 14 | The real `SyncConflictRules` implementation (not a copy): clean row accepts cloud, newer local change never overwritten, newer cloud wins, tie keeps the local row for re-upload, pushed rows are not requeued, tombstones; `LocalOnlyBackend` never reports itself as available; AI `detectSafety` distinguishes sadness from crisis; the offline fallback never claims to be a therapist; crisis messages return real-world support and set `isCrisis` |
 
@@ -63,7 +68,7 @@ Total: **36 widget tests.** Widget tests wrap the widget in the real
 `AppTheme.light()` inside a phone-sized surface, so a theme regression fails a
 widget test rather than shipping.
 
-**Grand total: 140 test cases** (99 unit + 36 widget + 5 integration).
+**Grand total: 222 test cases** (181 unit + 36 widget + 5 integration).
 
 ---
 
@@ -158,7 +163,13 @@ battery optimisation **on** (to see the failure mode) and once **off**.
 | `flutter analyze` is clean | **NOT verified** — never run |
 | Unit/widget/integration tests pass | **NOT verified** — never run |
 | An APK builds | **NOT verified** — no Android SDK/Gradle |
-| Notifications fire on a real device, in every state | **NOT verified** — implemented and wired end-to-end; requires the matrix in §5 |
+| Notifications fire on a real device, in every state | **NOT verified** — implemented and wired end-to-end; requires the matrix in §9 |
+| Notification **ids are unique per occurrence** | **Verified by simulation** — the old and new schemes were re-implemented and run: old = 96 of 112 alarms lost (86 %), new = 0 lost. Asserted by `test/unit/notification_id_test.dart` |
+| The local schema actually executes | **Verified against real SQLite** (`node:sqlite`): all 20 tables + 18 indexes create cleanly, and the v1→v2 migration preserves seeded user rows |
+| The v1→v2 migration is idempotent | **Verified against real SQLite**: run twice, no error, records intact |
+| Background action is exactly-once at the SQL level | **Verified against real SQLite**: `INSERT OR IGNORE` claims once; ten inserts produce one row |
+| Spoken reminders play with the app closed | **NOT verified** — the Kotlin engine is written and reviewed; needs a device (§9 S1) |
+| The Gradle wrapper executes | **NOT verified** — the official JAR, scripts and version pairing are in place; no JDK here to run it |
 | Firestore rules behave as documented | **NOT verified** — written and reviewed; deploy to a test project and run §5.4 |
 
 Anything not marked *verified* above must be established on your machine before
@@ -215,3 +226,60 @@ To generate them:
    `ARCHITECTURE.md`.
 
 Nothing in the build, the tests or the app depends on these files.
+
+---
+
+## 9. Manual device matrix
+
+Nothing in this table has been executed. It exists because the behaviours below
+cannot be checked by `flutter test`: they depend on Android's alarm delivery, Doze
+mode, OEM background restrictions and the notification shade. **Do not report
+these as verified until you have ticked them on real hardware.**
+
+Record the device and OS for each run — behaviour differs sharply between stock
+Android and Xiaomi/Oppo/Vivo/Samsung/Huawei builds.
+
+| # | Scenario | Steps | Expected |
+|---|---|---|---|
+| 1 | Fresh install | Install, open | Onboarding appears; no crash; no notification permission prompt yet |
+| 2 | Initial launch | Complete onboarding | Home dashboard populates; Diagnostics shows a non-zero reminder count |
+| 3 | Notifications granted | Allow when asked | Reminders appear at their slot time |
+| 4 | Notifications denied | Deny | App works; Diagnostics says reminders cannot appear and offers a settings link |
+| 5 | Exact alarms granted | Diagnostics → Grant | "Reminders land at the exact minute" |
+| 6 | Exact alarms denied | Diagnostics, deny/revoke | Reminders still arrive, a few minutes late; Diagnostics explains; **no reminder is lost** |
+| 7 | Phone locked | Lock, wait for a slot | Notification appears on the lock screen; action buttons work |
+| 8 | App backgrounded | Home, wait for a slot | Notification + speech; tapping "I drank water" adds exactly one glass |
+| 9 | App terminated | Swipe from recents, wait | Notification appears; **tapping an action updates the water total** — open the app and confirm the count changed. This is the core Issue-2 test |
+| 10 | Phone rebooted | Reboot, wait | Reminders reappear without opening the app. **This is the highest-risk unverified item** — see `REPAIR_CHANGELOG.md` R7.2 |
+| 11 | Internet disconnected | Airplane mode, use every feature | Everything works; no error dialogs; no data loss |
+| 12 | Internet restored | After offline edits | Sync uploads; nothing is duplicated |
+| 13 | Silent mode | Enable, wait for a slot | Notification appears silently; **no speech** (by design) |
+| 14 | Do Not Disturb | Enable, wait | Reminder suppressed or silent per DND rules; never overridden |
+| 15 | Battery saver | Enable, wait a full day | Reminders still fire; if they slip, Diagnostics says why |
+| 16 | App updated | Install a new build over the old one | Pending alarms survive (`MY_PACKAGE_REPLACED`); spoken reminders re-arm |
+| 17 | Timezone changed | Change zone in settings | Future reminders shift to the correct local time; no duplicates |
+| 18 | Device time changed | Move the clock forward/back | Schedule is rebuilt once; **no storm of duplicate alarms** |
+
+### Specifically for spoken reminders (Issue 3)
+
+| # | Scenario | Expected |
+|---|---|---|
+| S1 | Voice on, app closed, screen locked, wait for a slot | The line is spoken aloud (not just a notification tone) |
+| S2 | Voice off | Notification only, silence |
+| S3 | Phone with no TTS engine | Voice settings says so; notifications still work |
+| S4 | Voice settings → "Hear it" | Speaks the same line a real reminder would |
+| S5 | Change persona | Next spoken reminder uses the new pitch/rate |
+| S6 | Reboot, wait for a slot | Speech still works (native plan re-armed) |
+
+### How to check background actions actually persisted
+
+The only trustworthy check is the data, not the toast:
+
+1. Note today's water total on the Home card.
+2. Lock the phone, wait for a reminder, tap **I drank water**.
+3. Open the app. The total must have risen by exactly one glass.
+4. Tap the same action twice quickly (where the shade allows) — the total must
+   still rise once.
+5. `adb logcat -s flutter` and look for `AKASHA: failed to replay queued action`.
+   No such line means the headless write succeeded directly; the line appearing
+   followed by a correct total means the queue recovery worked.

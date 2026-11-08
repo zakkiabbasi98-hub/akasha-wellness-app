@@ -152,6 +152,25 @@ void main() {
       expect(reply.text, contains('real person'));
     });
 
+    test('unauthenticated callers fall back locally instead of calling out', () async {
+      // The deployed function rejects anonymous requests (repair R4). The client
+      // must therefore never attempt a request without an ID token — it would
+      // be a guaranteed 401. With an endpoint configured but no Firebase
+      // session, the local responder answers.
+      final service = AiCompanionService(
+        endpointOverride: 'https://example.invalid/akashaCompanion',
+      );
+      expect(service.isConfigured, isTrue);
+
+      final reply = await service.send(
+        message: 'I feel a bit scattered today',
+        history: const [],
+      );
+      expect(reply.fromBackend, isFalse);
+      expect(reply.text, isNotEmpty);
+      expect(reply.note, isNotNull);
+    });
+
     test('reflective fallback responds differently to different feelings', () {
       final service = AiCompanionService();
       final anxious = service.localReflection('I am anxious');

@@ -156,6 +156,43 @@ class WaterRepository {
     return log;
   }
 
+  /// Inserts a water log **inside an existing transaction**.
+  ///
+  /// Used by the notification action executor so the millilitres, the dedupe
+  /// marker and the history row commit atomically. [id] is deterministic for
+  /// notification-sourced logs, which makes a duplicated delivery a no-op
+  /// instead of a double count.
+  Future<void> insertLogInTxn(
+    Transaction txn, {
+    required String id,
+    required String userId,
+    required int amountMl,
+    required WaterLogSource source,
+    required DateTime at,
+    int? reminderMinute,
+    String? glassSize,
+    String? note,
+  }) async {
+    final log = WaterLog(
+      id: id,
+      userId: userId,
+      dayKey: AkashaDates.key(at),
+      loggedAt: at,
+      amountMl: amountMl,
+      source: source,
+      reminderMinute: reminderMinute,
+      glassSize: glassSize,
+      note: note,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await txn.insert(
+      'water_logs',
+      log.toRow(),
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
   Future<void> updateLogAmount(String id, int amountMl) async {
     await _db.db.update(
       'water_logs',

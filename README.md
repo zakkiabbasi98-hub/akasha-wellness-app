@@ -29,6 +29,23 @@ owner created:
 
 ---
 
+## Status: repair pass applied (v1.1.0)
+
+Seven reported reliability and security issues have been fixed — colliding
+notification ids, background action delivery, spoken reminders that never spoke,
+an unauthenticated AI endpoint, the missing Gradle wrapper, over-declared alarm
+permissions, and a full notification-engine audit.
+
+Every change is documented with its root cause, the files touched, the tests
+written and **what could not be verified**, in
+[`docs/REPAIR_CHANGELOG.md`](docs/REPAIR_CHANGELOG.md).
+
+> The code has still never been compiled in this repository's history: no Dart,
+> Flutter, JDK or Android SDK was available. `flutter analyze` and `flutter test`
+> are the first things to run. See §"What is still not verified" in the changelog.
+
+---
+
 ## Screenshots
 
 Screenshots live in `docs/screenshots/`. They are generated from the running app
@@ -99,7 +116,7 @@ ring, no photos, no ad-tech, no default Material 3 screens.
 | Navigation | `go_router` with `StatefulShellRoute` (per-tab state preserved) |
 | Local DB | SQLite via `sqflite`, migrations, foreign keys, indexes, soft deletes |
 | Notifications | `flutter_local_notifications` + `timezone`, exact-alarm aware |
-| Voice | `flutter_tts` (uses the phone's installed engine; no bundled audio) |
+| Voice | Android's native `TextToSpeech` from a Kotlin broadcast receiver — speaks even when the app is closed, since a Dart TTS engine cannot run after process death |
 | Cloud (optional) | Firebase Auth + Cloud Firestore (+ optional Cloud Functions) |
 | Charts | `fl_chart` |
 | Auth local | `local_auth` (biometrics) |
@@ -216,7 +233,7 @@ Example placeholder files: `firebase/firebase.example.json`,
 |---|---|---|
 | `POST_NOTIFICATIONS` (33+) | reminders | no reminders appear; app fully usable |
 | `RECEIVE_BOOT_COMPLETED` | restore reminders after reboot | reminders lost until app reopens |
-| `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` | land at the exact minute | reminders become inexact (minutes late) |
+| `SCHEDULE_EXACT_ALARM` | land at the exact minute | reminders become inexact (minutes late); the app auto-retries inexactly rather than losing them |
 | `USE_FULL_SCREEN_INTENT` | alarm-style lock-screen reminder | falls back to heads-up notification |
 | `VIBRATE` | quiet-mode reminder feedback | silent notifications |
 | `USE_BIOMETRIC` | optional app lock | lock unavailable |
@@ -264,9 +281,14 @@ flutter test integration_test   # on a connected device/emulator
 | `test/widget/design_system_test.dart` | theme fundamentals, gradient scaffold, cards, rings, droplet meter, empty/loading states, bottom nav + semantics |
 | `test/widget/dashboard_widgets_test.dart` | water hero card maths and copy, medicine card states, mood card, shortcuts, self-care/motivation cards |
 | `test/unit/routing_test.dart` | every route constant exists in the tree — the check that caught seven dead Settings tiles |
+| `test/unit/notification_id_test.dart` | one id per *occurrence*: 112 alarms across a 7-day horizon stay 112 distinct ids |
+| `test/unit/notification_planner_test.dart` | the scheduling contract: midnight inclusive, quiet hours, weekdays, courses that ended, alarm budget |
+| `test/unit/notification_action_test.dart` | payload round-trip and the dedupe key that makes a re-delivered action a no-op |
+| `test/unit/notification_ledger_test.dart` | runs **real SQLite**: ten taps log one glass; a v1 database upgrades to v2 with every record intact |
+| `test/unit/spoken_reminder_test.dart` | the voice setting actually reaches the scheduler, line rotation, copy safety |
 | `integration_test/app_test.dart` | install → onboarding → log water → persist across restart |
 
-140 test cases in total (99 unit, 36 widget, 5 integration).
+222 test cases in total (181 unit, 36 widget, 5 integration).
 
 `docs/TESTING.md` lists the **device matrix** (locked screen, background,
 terminated, reboot, airplane mode, DND, denied permissions, Android 8–14) and how

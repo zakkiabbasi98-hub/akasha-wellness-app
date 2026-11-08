@@ -53,12 +53,21 @@ class _AkashaAppState extends ConsumerState<AkashaApp>
   }
 
   Future<void> _onResume() async {
-    // 1. Drain anything that arrived while the app was killed.
+    // 1. Drain anything the device queued while the app was dead. This is the
+    //    recovery path for headless-isolate actions that could not write
+    //    immediately; replaying is idempotent, so draining often is free.
+    try {
+      await ref.read(notificationActionControllerProvider).drainPending();
+    } catch (e) {
+      debugPrint('AKASHA: resume drain failed: $e');
+    }
+
+    // 2. Reconcile the day boundary.
     final profile = await ref.read(profileRepositoryProvider).currentProfile();
     if (profile != null) {
       await ref.read(medicineRepositoryProvider).reconcileMissedDoses(profile.id);
     }
-    // 2. Refresh the UI with whatever those actions changed.
+    // 3. Refresh the UI with whatever those actions changed.
     ref.read(dataRevisionProvider.notifier).state++;
 
     // 3. If we were away across a reminder boundary, re-materialise the
@@ -85,9 +94,7 @@ class _AkashaAppState extends ConsumerState<AkashaApp>
 
   Future<void> _rebuildSchedule() async {
     try {
-      final exact =
-          await ref.read(notificationServiceProvider).canScheduleExactAlarms();
-      await ref.read(reminderSchedulerProvider).rescheduleAll(exact: exact);
+      await ref.read(reminderSchedulerProvider).rescheduleAll();
       _lastScheduledAt = DateTime.now();
     } catch (_) {
       // Not fatal: reminders already scheduled stay scheduled.

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show Importance;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -80,6 +82,8 @@ class DiagnosticsScreen extends ConsumerWidget {
                         Text(
                           '${status.pendingWater} water · '
                           '${status.pendingMedicine} medicine · '
+                          '${status.pendingMotivation} encouragement · '
+                          '${status.pendingLoveNotes} notes · '
                           '${AppConstants.scheduleHorizonDays}-day horizon',
                           style: const TextStyle(
                             fontSize: 11,
@@ -157,6 +161,36 @@ class DiagnosticsScreen extends ConsumerWidget {
                               : 'Do Not Disturb is off.',
                           actionLabel: null,
                         ),
+                        _Check(
+                          title: 'Water channel volume',
+                          ok: status.channelWaterImportance == Importance.min,
+                          okWhenFalseOnly: true,
+                          detail: status.channelWaterImportance == Importance.min
+                              ? 'You muted the "Water reminders" channel at the Android '
+                                  'level. The app still schedules them; Android will not '
+                                  'show them. Re-enable the channel to hear reminders.'
+                              : 'The water reminder channel is audible.',
+                          actionLabel: status.channelWaterImportance == Importance.min
+                              ? 'Open settings'
+                              : null,
+                          onAction: () async {
+                            await ref
+                                .read(systemChannelProvider)
+                                .openNotificationSettings();
+                          },
+                        ),
+                        _Check(
+                          title: 'Alarm budget',
+                          ok: !status.hasAlarmBudgetPressure,
+                          okWhenFalseOnly: true,
+                          detail: status.hasAlarmBudgetPressure
+                              ? '${status.pendingTotal} reminders are pending, close to the '
+                                  '${status.maxBudget} Android reliably honours. Reduce '
+                                  'reminder times to keep them all reliable.'
+                              : '${status.pendingTotal} of ${status.maxBudget} alarm slots '
+                                  'in use. Plenty of headroom.',
+                          actionLabel: null,
+                        ),
                       ],
                     ),
                   ),
@@ -180,9 +214,12 @@ class DiagnosticsScreen extends ConsumerWidget {
                               body:
                                   'This is a test. If you can see this, reminders work.',
                             );
-                            await ref
-                                .read(voiceServiceProvider)
-                                .speak("Hey Akasha! It's time to drink some water.");
+                            // Speak through the same native engine a real
+                            // reminder uses, so the test is representative.
+                            await ref.read(voicePlanServiceProvider).preview(
+                                  ref.read(settingsControllerProvider).valueOrNull ??
+                                      await ref.read(settingsProvider.future),
+                                );
                             if (context.mounted) {
                               showAkashaToast(
                                 context,
@@ -225,11 +262,33 @@ class DiagnosticsScreen extends ConsumerWidget {
                           iconColor: AppColors.rose,
                           onTap: () async {
                             final settings =
-                                ref.read(settingsControllerProvider).valueOrNull;
-                            await ref.read(voiceServiceProvider).speak(
-                                  "Hey Akasha! It's time to drink some water.",
-                                  profile: settings?.voiceProfile,
+                                ref.read(settingsControllerProvider).valueOrNull ??
+                                    await ref.read(settingsProvider.future);
+                            final service = ref.read(voicePlanServiceProvider);
+                            if (!await service.isAvailable()) {
+                              if (context.mounted) {
+                                showAkashaToast(
+                                  context,
+                                  'This phone has no text-to-speech engine installed.',
+                                  icon: Icons.volume_off_rounded,
+                                  color: AppColors.warning,
                                 );
+                              }
+                              return;
+                            }
+                            if (await service.isSuppressed()) {
+                              if (context.mounted) {
+                                showAkashaToast(
+                                  context,
+                                  'The phone is muted or in Do Not Disturb, so speech '
+                                  'is suppressed right now.',
+                                  icon: Icons.volume_mute_rounded,
+                                  color: AppColors.warning,
+                                );
+                              }
+                              return;
+                            }
+                            await service.preview(settings);
                           },
                         ),
                         const Divider(height: 1, indent: 16, endIndent: 16),
@@ -260,6 +319,13 @@ class DiagnosticsScreen extends ConsumerWidget {
                               'Some manufacturers (Xiaomi, Oppo, Vivo, Samsung, Huawei) apply '
                               'extra background restrictions. Exempting AKASHA from battery '
                               'optimisation usually helps.',
+                        ),
+                        const _Limit(
+                          text:
+                              'Spoken reminders are played by Android itself, so they work '
+                              'with the app closed. They are still suppressed by silent mode '
+                              'and Do Not Disturb, and they stop entirely if Android is '
+                              'force-stopped — in that case the notification still appears.',
                         ),
                         const _Limit(
                           text:

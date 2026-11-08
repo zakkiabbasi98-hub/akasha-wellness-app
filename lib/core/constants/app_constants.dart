@@ -39,16 +39,23 @@ abstract final class AppConstants {
   static const String channelLoveNotes = 'akasha_love_notes';
   static const String channelDaily = 'akasha_daily_report';
 
-  static const int idWaterBase = 10000;
-  static const int idMedicineBase = 20000;
-  static const int idMotivationBase = 30000;
-  static const int idLoveNoteBase = 40000;
-  static const int idSnoozeBase = 50000;
-  static const int idDailyReport = 60000;
+  // Notification id bands live in exactly one place:
+  // lib/core/notifications/notification_ids.dart. They used to be duplicated
+  // here with different values, which is a classic way to schedule the same
+  // reminder under two ids. Do not reintroduce them.
 
-  /// How far ahead the scheduler materialises notifications (Android allows
-  /// ~500 pending alarms; a 7-day horizon stays well inside that).
-  static const int scheduleHorizonDays = 7;
+  /// How far ahead the scheduler materialises notifications.
+  ///
+  /// 5 days (not 7) because the alarm budget is finite and medicine dominates
+  /// it: 4 medicines x 3 times x 5 days = 60 medicine alarms, plus 16 water
+  /// slots x 5 days = 80. A 7-day horizon blew past [maxPendingAlarms] for a
+  /// user with several medicines, and Android silently drops the overflow.
+  static const int scheduleHorizonDays = 5;
+
+  /// Hard ceiling on simultaneously registered alarms. Android's own limit is
+  /// around 500; behaviour degrades well before that on OEM builds, so the app
+  /// stays materially below it and reports a warning above 400.
+  static const int maxPendingAlarms = 400;
 
   // ── Misc ────────────────────────────────────────────────────────────────
   static const int motivationPoolTarget = 100; // >=100 original messages

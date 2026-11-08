@@ -1,6 +1,3 @@
-import 'dart:io';
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -8,10 +5,15 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../content/motivation_content.dart';
 import '../constants/app_constants.dart';
+import '../utils/date_utils.dart';
+import 'background_actions.dart';
 import 'notification_ids.dart';
+import 'notification_planner.dart';
+import 'spoken_reminders.dart';
 
-/// Action ids used by the notification buttons. Kept as ints because that is
-/// what Android's action callbacks give back.
+/// Action ids used by the notification buttons. These are the strings Android
+/// gives back in `NotificationResponse.actionId`; they are parsed as ints
+/// because the plugin delivers them as strings.
 abstract final class AkashaActions {
   static const int drankWater = 1;
   static const int skipWater = 2;
@@ -28,135 +30,99 @@ abstract final class AkashaActions {
   static const String payloadDaily = 'daily';
 }
 
-/// Payload format: `kind|refId|extraInt`
-/// e.g. `water|540|250` or `medicine|medlog-id|480`
+/// Wire format of a notification payload: `kind|refId|amountMl|slotMinute|dayKey`
+///
+/// `dayKey` was added in repair R1/R2 so a background action can attribute the
+/// tap to the **correct calendar day** even if the user answers at 00:05 for a
+/// reminder that fired at 23:55. Without it, "I drank water" just after
+/// midnight was booked against the wrong day.
 class NotificationPayload {
   const NotificationPayload({
     required this.kind,
     this.refId,
     this.value,
     this.slotMinute,
+    this.dayKey,
   });
 
   final String kind;
   final String? refId;
   final int? value;
   final int? slotMinute;
+  final String? dayKey;
 
-  String encode() => [kind, refId ?? '', value?.toString() ?? '', slotMinute?.toString() ?? '']
-      .join('|');
+  /// The calendar day this notification belongs to. Falls back to today when
+  /// the payload predates the field (alarms scheduled by an older build and
+  /// still pending after an app update).
+  DateTime get occurredOn {
+    final key = dayKey;
+    if (key != null && key.isNotEmpty) {
+      final parsed = AkashaDates.parseKey(key);
+      return parsed;
+    }
+    return AkashaDates.today();
+  }
+
+  String encode() => [
+        kind,
+        refId ?? '',
+        value?.toString() ?? '',
+        slotMinute?.toString() ?? '',
+        dayKey ?? '',
+      ].join('|');
 
   static NotificationPayload? decode(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     final parts = raw.split('|');
+    if (parts.isEmpty || parts[0].isEmpty) return null;
     return NotificationPayload(
-      kind: parts.isNotEmpty ? parts[0] : '',
+      kind: parts[0],
       refId: parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null,
-      value: parts.length > 2 && parts[2].isNotEmpty ? int.tryParse(parts[2]) : null,
+      value:
+          parts.length > 2 && parts[2].isNotEmpty ? int.tryParse(parts[2]) : null,
       slotMinute:
           parts.length > 3 && parts[3].isNotEmpty ? int.tryParse(parts[3]) : null,
+      dayKey: parts.length > 4 && parts[4].isNotEmpty ? parts[4] : null,
     );
   }
 }
 
 /// Top-level entry point required by flutter_local_notifications.
 ///
-/// MUST be a top-level (or static) function: Android invokes it in a separate
-/// isolate when the app is terminated. It deliberately does almost nothing —
-/// it appends the action to the durable queue — so it cannot fail on an OEM
-/// device that kills us while opening SQLite.
+/// MUST be top-level: Android invokes it in a **separate isolate** when the app
+/// is terminated. It therefore touches no static state that the main isolate
+/// sets up — [BackgroundActionEngine] opens its own database connection.
 @pragma('vm:entry-point')
-void onBackgroundNotificationResponse(NotificationResponse response) async {
-  // Import is deferred to keep this function allocation-light.
-  await BackgroundActionHandler.handle(response);
-}
-
-/// Static holder so the background entry point has no constructor dependency.
-abstract final class BackgroundActionHandler {
-  static Future<bool> Function(NotificationResponse response)? _delegate;
-
-  /// Registered by the main isolate during bootstrap. In the background
-  /// isolate this is null, so the built-in queue-only path runs instead.
-  static void register(Future<bool> Function(NotificationResponse) delegate) {
-    _delegate = delegate;
-  }
-
-  static Future<void> handle(NotificationResponse response) async {
-    final delegate = _delegate;
-    if (delegate != null) {
-      try {
-        await delegate(response);
-        return;
-      } catch (e) {
-        debugPrint('AKASHA background delegate failed: $e');
-      }
-    }
-    // Headless path: persist for the next app launch.
-    final payload = NotificationPayload.decode(response.payload);
-    await BackgroundQueueWriter.enqueue(response, payload);
-  }
-}
-
-/// Thin indirection so notification_service.dart does not import dart:io
-/// utilities in the entry point path.
-abstract final class BackgroundQueueWriter {
-  static Future<void> Function(NotificationResponse, NotificationPayload?)?
-      _writer;
-
-  static void register(
-    Future<void> Function(NotificationResponse, NotificationPayload?) writer,
-  ) {
-    _writer = writer;
-  }
-
-  static Future<void> enqueue(
-    NotificationResponse response,
-    NotificationPayload? payload,
-  ) async {
-    final writer = _writer;
-    if (writer == null) {
-      debugPrint(
-        'AKASHA: background action received without persistence '
-        '(actionId=${response.actionId}, payload=${response.payload})',
-      );
-      return;
-    }
-    await writer(response, payload);
-  }
-}
-
-/// What the user did on a notification, normalised.
-class NotificationActionEvent {
-  const NotificationActionEvent({
-    required this.actionId,
-    required this.payload,
-    required this.respondedAt,
-  });
-
-  final int actionId;
-  final NotificationPayload payload;
-  final DateTime respondedAt;
+void onBackgroundNotificationResponse(NotificationResponse response) {
+  // Fire and forget: the plugin signature is void, and the queue inside
+  // BackgroundActionEngine guarantees durability if this isolate is killed.
+  BackgroundActionEngine.handle(response);
 }
 
 /// Schedules and shows every local notification in the app.
 ///
 /// Design notes
 /// ------------
-/// * All times are *local wall-clock* in the device timezone (via the
-///   `timezone` database), so a reminder set for 09:00 stays at 09:00 across a
-///   DST shift or a flight.
-/// * Recurring reminder slots are materialised day-by-day over a 7-day horizon
-///   instead of using `matchDateTimeComponents: DateTimeComponents.time`.
-///   Reason: with matchDateTimeComponents the payload cannot vary per day, and
-///   medicine notifications *must* carry the day key. A rolling horizon is
-///   re-materialised on every app launch, after boot, and after timezone
-///   changes — which is also what makes duplicate suppression testable.
-/// * Ids are deterministic (see [AkashaNotificationIds]) so scheduling twice
-///   replaces rather than duplicates.
+/// * Times are local wall-clock in the device timezone, so 09:00 stays 09:00
+///   across a DST shift or a flight.
+/// * Recurring slots are materialised day-by-day over a rolling horizon rather
+///   than using `matchDateTimeComponents`, because the payload must differ per
+///   day (medicine rows are addressed by a day-specific id) and because ids must
+///   differ per day (repair R1 — a shared id made each day overwrite the last).
+/// * All ids come from [AkashaNotificationIds] via [NotificationPlanner]; this
+///   class performs side effects only and decides nothing.
 class NotificationService {
   NotificationService();
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+
+  // ── Channels ──────────────────────────────────────────────────────────────
+  //
+  // Audio usage is what makes water feel like an alarm and medicine feel like a
+  // message. Android maps `alarm` onto the alarm volume stream (so a muted
+  // media volume does not silence a reminder) while `notification` follows the
+  // normal message tone. Neither bypasses Do Not Disturb — that stays the
+  // user's decision, always.
 
   static const AndroidNotificationChannel waterChannel = AndroidNotificationChannel(
     AppConstants.channelWater,
@@ -165,6 +131,7 @@ class NotificationService {
     importance: Importance.high,
     playSound: true,
     enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 
   static const AndroidNotificationChannel medicineChannel = AndroidNotificationChannel(
@@ -174,6 +141,7 @@ class NotificationService {
     importance: Importance.high,
     playSound: true,
     enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.notification,
   );
 
   static const AndroidNotificationChannel motivationChannel = AndroidNotificationChannel(
@@ -182,6 +150,7 @@ class NotificationService {
     description: 'Small supportive messages during your day.',
     importance: Importance.defaultImportance,
     playSound: true,
+    audioAttributesUsage: AudioAttributesUsage.notification,
   );
 
   static const AndroidNotificationChannel loveNoteChannel = AndroidNotificationChannel(
@@ -190,6 +159,7 @@ class NotificationService {
     description: 'Warm notes from someone who cares.',
     importance: Importance.defaultImportance,
     playSound: true,
+    audioAttributesUsage: AudioAttributesUsage.notification,
   );
 
   static const AndroidNotificationChannel dailyChannel = AndroidNotificationChannel(
@@ -201,15 +171,19 @@ class NotificationService {
   );
 
   bool _initialised = false;
-  NotificationSettings? _settings;
-  final List<NotificationActionEvent> _pendingEvents = [];
-  final math.Random _random = math.Random();
+  bool _lastInitFailed = false;
+  String? _lastInitError;
 
-  /// Set by the app so the UI can react to notification taps that arrive while
-  /// running (e.g. open the water screen).
+  /// Actions answered while the UI was alive. Drained by the action controller.
+  final List<NotificationActionEvent> _pendingEvents = [];
+
+  /// Fired when a notification is tapped (not an action button), so the UI can
+  /// navigate. Set by the app shell.
   void Function(NotificationPayload payload)? onForegroundTap;
 
   bool get isInitialised => _initialised;
+  bool get lastInitFailed => _lastInitFailed;
+  String? get lastInitError => _lastInitError;
 
   Future<bool> initialize({
     void Function(NotificationResponse response)? onForegroundResponse,
@@ -218,13 +192,14 @@ class NotificationService {
 
     try {
       tzdata.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation(await _deviceTimeZoneName()));
+      tz.setLocalLocation(tz.getLocation(_zoneNameForOffset(DateTime.now())));
 
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
       const darwinSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
+        requestAlertPermission: false, // asked explicitly, in context
         requestBadgePermission: false,
-        requestSoundPermission: true,
+        requestSoundPermission: false,
       );
       const initSettings = InitializationSettings(
         android: androidSettings,
@@ -234,74 +209,88 @@ class NotificationService {
       final ok = await _plugin.initialize(
         initSettings,
         onDidReceiveNotificationResponse: (response) {
+          final payload = NotificationPayload.decode(response.payload);
+          if (payload == null) return;
+          final actionId = int.tryParse(response.actionId ?? '') ?? 0;
           _pendingEvents.add(NotificationActionEvent(
-            actionId: response.actionId != null ? int.tryParse(response.actionId!) ?? 0 : 0,
-            payload: NotificationPayload.decode(response.payload) ??
-                const NotificationPayload(kind: 'unknown'),
+            actionId: actionId,
+            payload: payload,
             respondedAt: DateTime.now(),
           ));
           onForegroundResponse?.call(response);
-          final payload = NotificationPayload.decode(response.payload);
-          if (payload != null) onForegroundTap?.call(payload);
+          if (actionId == 0) onForegroundTap?.call(payload);
         },
-        // Headless callback: Android uses this when the app is terminated.
-        onDidReceiveBackgroundNotificationResponse: onBackgroundNotificationResponse,
+        // Runs in a headless isolate when the app is not in memory.
+        onDidReceiveBackgroundNotificationResponse:
+            onBackgroundNotificationResponse,
       );
 
       _initialised = ok ?? false;
-      if (_initialised) await _createChannels();
+      if (_initialised) {
+        await _createChannels();
+      } else {
+        _lastInitFailed = true;
+        _lastInitError = 'The notification plugin refused to initialise.';
+      }
       return _initialised;
     } catch (e, st) {
+      _lastInitFailed = true;
+      _lastInitError = e.toString();
       debugPrint('AKASHA: notification init failed: $e\n$st');
       return false;
     }
   }
 
-  Future<String> _deviceTimeZoneName() async => _fallbackZoneName();
-
-  /// Maps the device's current UTC offset onto a zone name that exists in the
-  /// tz database. We cannot read the IANA name without an extra plugin, but
-  /// every name we return produces the same wall-clock offset, which is all
-  /// scheduling needs.
+  /// Picks a tz-database zone whose current UTC offset matches the device's.
   ///
-  /// A DST transition is handled by the app re-materialising the whole horizon
-  /// (see ReminderScheduler) on launch, on the native TIME_SET/TIMEZONE_CHANGED
-  /// broadcast, and in the daily background pass.
-  String _fallbackZoneName() {
-    final offset = DateTime.now().timeZoneOffset;
+  /// Reading the real IANA name needs an extra plugin, and every zone with the
+  /// same offset produces identical wall-clock instants — which is all that
+  /// scheduling needs. A DST change is handled by re-materialising the horizon
+  /// (on launch, on the native TIME_SET/TIMEZONE_CHANGED broadcast, and daily).
+  static String _zoneNameForOffset(DateTime now) {
+    final offset = now.timeZoneOffset;
     if (offset == Duration.zero) return 'UTC';
-    const known = [
+
+    const candidates = [
       'Asia/Karachi',
       'Asia/Kolkata',
       'Asia/Dhaka',
+      'Asia/Kathmandu',
       'Asia/Dubai',
       'Asia/Riyadh',
+      'Asia/Tehran',
+      'Asia/Karachi',
       'Asia/Jakarta',
+      'Asia/Shanghai',
       'Asia/Singapore',
       'Asia/Tokyo',
+      'Asia/Seoul',
+      'Australia/Sydney',
       'Europe/London',
-      'Europe/Berlin',
       'Europe/Paris',
+      'Europe/Berlin',
       'Europe/Istanbul',
+      'Europe/Moscow',
+      'Africa/Lagos',
+      'Africa/Johannesburg',
+      'America/Sao_Paulo',
       'America/New_York',
       'America/Chicago',
       'America/Denver',
       'America/Los_Angeles',
-      'America/Sao_Paulo',
-      'Africa/Cairo',
-      'Africa/Lagos',
-      'Australia/Sydney',
       'Pacific/Auckland',
     ];
-    for (final name in known) {
+
+    for (final name in candidates) {
       try {
-        final loc = tz.getLocation(name);
-        if (tz.TZDateTime.now(loc).timeZoneOffset == offset) return name;
+        final zone = tz.getLocation(name);
+        final nowInZone = tz.TZDateTime.now(zone);
+        if (nowInZone.timeZoneOffset == offset) return name;
       } catch (_) {
         continue;
       }
     }
-    // Fixed-offset fallback for whole-hour zones (Etc/GMT signs are inverted).
+    // Whole-hour fallback. Etc/GMT signs are inverted relative to ISO.
     if (offset.inMinutes % 60 == 0) {
       final hours = offset.inHours;
       final sign = hours >= 0 ? '-' : '+';
@@ -315,8 +304,7 @@ class NotificationService {
   }
 
   Future<void> _createChannels() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _android;
     if (android == null) return;
     for (final channel in [
       waterChannel,
@@ -325,97 +313,130 @@ class NotificationService {
       loveNoteChannel,
       dailyChannel,
     ]) {
-      await android.createNotificationChannel(channel);
+      try {
+        await android.createNotificationChannel(channel);
+      } catch (e) {
+        debugPrint('AKASHA: channel ${channel.id} failed: $e');
+      }
     }
   }
 
-  // ── Permission helpers ──────────────────────────────────────────────────
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+  // ── Permissions ───────────────────────────────────────────────────────────
 
   Future<bool> requestPermission() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final android = _android;
     if (android == null) return false;
-    final granted = await android.requestNotificationsPermission();
-    _settings = NotificationSettings();
-    return granted ?? false;
+    return await android.requestNotificationsPermission() ?? false;
   }
 
-  Future<bool> areNotificationsEnabled() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (android == null) return false;
-    final enabled = await android.areNotificationsEnabled();
-    _settings = NotificationSettings();
-    return enabled ?? false;
+  Future<bool> areNotificationsEnabled() async =>
+      await _android?.areNotificationsEnabled() ?? false;
+
+  Future<bool> canScheduleExactAlarms() async =>
+      await _android?.canScheduleExactNotifications() ?? false;
+
+  Future<bool> requestExactAlarmsPermission() async =>
+      await _android?.requestExactAlarmsPermission() ?? false;
+
+  Future<bool> areFullScreenIntentsAllowed() async =>
+      await _android?.canUseFullScreenIntent() ?? false;
+
+  /// Current user-facing importance of a channel, or null when it does not
+  /// exist yet. The diagnostics screen uses this to notice that the user
+  /// downgraded water reminders to "silent" and stopped hearing them.
+  Future<Importance?> channelImportance(String channelId) async {
+    try {
+      final channel = await _android?.getNotificationChannel(channelId);
+      return channel?.importance;
+    } catch (_) {
+      return null;
+    }
   }
 
-  Future<bool> requestExactAlarmsPermission() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (android == null) return false;
-    return await android.requestExactAlarmsPermission() ?? false;
-  }
+  // ── Scheduling ────────────────────────────────────────────────────────────
 
-  Future<bool> canScheduleExactAlarms() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (android == null) return false;
-    return await android.canScheduleExactNotifications() ?? false;
-  }
-
-  Future<bool> areFullScreenIntentsAllowed() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (android == null) return false;
-    return await android.canUseFullScreenIntent() ?? false;
-  }
-
-  NotificationSettings? get lastSettings => _settings;
-
-  // ── Water ───────────────────────────────────────────────────────────────
-
-  /// Schedules one daily reminder slot across the horizon.
-  Future<void> scheduleWaterSlot({
-    required int minuteOfDay,
-    required int amountMl,
-    required int horizonDays,
+  /// Registers one planned alarm.
+  ///
+  /// Returning a bool (instead of throwing) matters: the planner may produce
+  /// 200 alarms and one refusal from the OS must not abort the whole pass.
+  Future<bool> schedulePlanned(
+    PlannedAlarm alarm, {
     required bool exact,
-    String? customTitle,
-    String? customBody,
-    bool alarmStyle = true,
+    required NotificationText text,
+    bool voiceSpoken = false,
   }) async {
-    final copy = customTitle != null && customBody != null
-        ? [customTitle, customBody]
-        : kWaterNotificationCopy[_random.nextInt(kWaterNotificationCopy.length)];
-    final voiceLine = kWaterVoiceLines[_random.nextInt(kWaterVoiceLines.length)];
+    final details = _detailsFor(alarm, text, voiceSpoken: voiceSpoken);
+    // The payload records the day the *occurrence* belongs to, not the day the
+    // user answers.
+    final payload = NotificationPayload(
+      kind: alarm.kind,
+      refId: alarm.refId,
+      value: alarm.amountMl,
+      slotMinute: alarm.minuteOfDay,
+      dayKey: AkashaDates.key(alarm.when),
+    ).encode();
 
-    for (var dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-      final when = _nextInstanceOf(minuteOfDay, dayOffset: dayOffset);
-      if (when == null) continue;
-      if (when.isBefore(DateTime.now())) continue;
-
+    try {
       await _plugin.zonedSchedule(
-        AkashaNotificationIds.water(minuteOfDay),
-        copy[0],
-        copy[1],
-        _toTz(when),
-        NotificationDetails(
+        alarm.id,
+        text.title,
+        text.body,
+        _toTz(alarm.when),
+        details,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: payload,
+      );
+      return true;
+    } catch (e) {
+      // The classic cause is `exact_alarms_not_permitted` after the user
+      // revokes the permission. Retry once inexactly rather than losing the
+      // reminder entirely.
+      debugPrint('AKASHA: exact schedule failed for ${alarm.id} ($e); '
+          'retrying inexact');
+      try {
+        await _plugin.zonedSchedule(
+          alarm.id,
+          text.title,
+          text.body,
+          _toTz(alarm.when),
+          details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: payload,
+        );
+        return true;
+      } catch (e2) {
+        debugPrint('AKASHA: scheduling ${alarm.id} failed completely: $e2');
+        return false;
+      }
+    }
+  }
+
+  NotificationDetails _detailsFor(
+    PlannedAlarm alarm,
+    NotificationText text, {
+    required bool voiceSpoken,
+  }) {
+    switch (alarm.kind) {
+      case 'water':
+        return NotificationDetails(
           android: AndroidNotificationDetails(
             AppConstants.channelWater,
             'Water reminders',
-            channelDescription: 'Gentle reminders to drink water through your day.',
+            channelDescription:
+                'Gentle reminders to drink water through your day.',
             importance: Importance.high,
             priority: Priority.high,
             category: AndroidNotificationCategory.reminder,
-            // Head-up + the alarm-style full screen on the most recent slot
-            // only; when the OS refuses a full screen intent it silently
-            // degrades to a heads-up notification (which is the honest,
-            // policy-compliant outcome).
-            fullScreenIntent: alarmStyle && dayOffset == 0,
             visibility: NotificationVisibility.public,
             enableVibration: true,
             ticker: 'Water reminder',
-            styleInformation: BigTextStyleInformation(copy[1]),
+            styleInformation: BigTextStyleInformation(text.body),
             icon: 'ic_stat_water',
             actions: const [
               AndroidNotificationAction(
@@ -423,7 +444,6 @@ class NotificationService {
                 'I drank water',
                 showsUserInterface: false,
                 cancelNotification: true,
-                icon: DrawableResourceAndroidBitmap('ic_stat_water'),
               ),
               AndroidNotificationAction(
                 AkashaActions.skipWater,
@@ -440,97 +460,84 @@ class NotificationService {
             ],
           ),
           iOS: const DarwinNotificationDetails(presentSound: true),
-        ),
-        androidScheduleMode:
-            exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
-        payload: NotificationPayload(
-          kind: AkashaActions.payloadWater,
-          refId: voiceLine,
-          value: amountMl,
-          slotMinute: minuteOfDay,
-        ).encode(),
-        // No matchDateTimeComponents: we materialise the horizon ourselves.
-      );
+        );
+
+      case 'medicine':
+        return NotificationDetails(
+          android: AndroidNotificationDetails(
+            AppConstants.channelMedicine,
+            'Medicine reminders',
+            channelDescription: 'Your scheduled medicine times, as a calm message.',
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.reminder,
+            // A message tone, not a siren: medication reminders should feel
+            // like a note from someone who cares, not an alarm clock.
+            onlyAlertOnce: true,
+            icon: 'ic_stat_medicine',
+            styleInformation: BigTextStyleInformation(text.body),
+            actions: const [
+              AndroidNotificationAction(
+                AkashaActions.tookMedicine,
+                'I took it',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                AkashaActions.skipMedicine,
+                'Skip',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                AkashaActions.snoozeMedicine,
+                'Later',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+            ],
+          ),
+          iOS: const DarwinNotificationDetails(presentSound: true),
+        );
+
+      case 'love_note':
+        return NotificationDetails(
+          android: AndroidNotificationDetails(
+            AppConstants.channelLoveNotes,
+            'Little love notes',
+            importance: Importance.defaultImportance,
+            styleInformation: BigTextStyleInformation(text.body),
+          ),
+        );
+
+      case 'daily':
+        return const NotificationDetails(
+          android: AndroidNotificationDetails(
+            AppConstants.channelDaily,
+            'Daily summary',
+            importance: Importance.low,
+            priority: Priority.low,
+            playSound: false,
+          ),
+        );
+
+      default: // motivation
+        return NotificationDetails(
+          android: AndroidNotificationDetails(
+            AppConstants.channelMotivation,
+            'Encouragement',
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            category: AndroidNotificationCategory.social,
+            styleInformation: BigTextStyleInformation(text.body),
+          ),
+        );
     }
   }
 
-  // ── Medicine ────────────────────────────────────────────────────────────
-
-  Future<void> scheduleMedicineDose({
-    required String logId,
-    required String medicineName,
-    required DateTime when,
-    required int minuteOfDay,
-    required bool exact,
-    required bool alarmStyle,
-  }) async {
-    if (when.isBefore(DateTime.now())) return;
-    final copy = kMedicineNotificationCopy[
-        _random.nextInt(kMedicineNotificationCopy.length)];
-    final body = copy[1].replaceFirst('your medicine', medicineName);
-
-    await _plugin.zonedSchedule(
-      AkashaNotificationIds.medicine(
-        logId,
-        _dayKey(when),
-        minuteOfDay,
-      ),
-      copy[0],
-      body,
-      _toTz(when),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          AppConstants.channelMedicine,
-          'Medicine reminders',
-          channelDescription: 'Your scheduled medicine times, as a calm message.',
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.reminder,
-          // A quiet message tone, not an alarm — medication reminders should
-          // feel like a note, not a siren.
-          playSound: true,
-          fullScreenIntent: false,
-          onlyAlertOnce: true,
-          icon: 'ic_stat_medicine',
-          styleInformation: BigTextStyleInformation(
-            '$body\n\n$medicineName',
-          ),
-          actions: const [
-            AndroidNotificationAction(
-              AkashaActions.tookMedicine,
-              'I took it',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              AkashaActions.skipMedicine,
-              'Skip',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              AkashaActions.snoozeMedicine,
-              'Later',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-          ],
-        ),
-        iOS: const DarwinNotificationDetails(presentSound: true),
-      ),
-      androidScheduleMode:
-          exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
-      payload: NotificationPayload(
-        kind: AkashaActions.payloadMedicine,
-        refId: logId,
-        slotMinute: minuteOfDay,
-      ).encode(),
-    );
-  }
-
-  // ── Snooze ──────────────────────────────────────────────────────────────
-
-  Future<void> scheduleSnooze({
+  /// A snooze alarm. Deliberately **not** derived from the original slot id, so
+  /// it can never overwrite the next regular reminder (repair R1b).
+  Future<bool> scheduleSnooze({
     required String snoozeId,
     required int amountMl,
     required DateTime when,
@@ -538,152 +545,76 @@ class NotificationService {
     required bool isMedicine,
     String? refId,
     bool exact = true,
+    String? voiceLine,
   }) async {
     final title = isMedicine ? 'A gentle nudge, again' : 'Your water is still waiting ♡';
     final body = isMedicine
         ? 'Just checking in about your medicine. Only take it if it is due.'
-        : 'You asked me to remind you. One little glass when you can.';
+        : (voiceLine ?? 'You asked me to remind you. One little glass when you can.');
 
-    await _plugin.zonedSchedule(
-      AkashaNotificationIds.snooze(snoozeId),
-      title,
-      body,
-      _toTz(when),
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          isMedicine ? AppConstants.channelMedicine : AppConstants.channelWater,
-          isMedicine ? 'Medicine reminders' : 'Water reminders',
-          importance: Importance.high,
-          priority: Priority.high,
-          fullScreenIntent: !isMedicine,
-          actions: [
-            AndroidNotificationAction(
-              isMedicine ? AkashaActions.tookMedicine : AkashaActions.drankWater,
-              isMedicine ? 'I took it' : 'I drank water',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              AkashaActions.skipWater,
-              'Skip',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              AkashaActions.snoozeWater,
-              'Later',
-              showsUserInterface: false,
-              cancelNotification: true,
-            ),
-          ],
-          styleInformation: BigTextStyleInformation(body),
-        ),
-      ),
-      androidScheduleMode:
-          exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
-      payload: NotificationPayload(
-        kind: isMedicine ? AkashaActions.payloadMedicine : AkashaActions.payloadWater,
-        refId: isMedicine ? refId : null,
-        value: amountMl,
-        slotMinute: originalMinute,
-      ).encode(),
-    );
-  }
-
-  // ── Encouragement / love notes / daily summary ──────────────────────────
-
-  Future<void> scheduleMotivation({
-    required int minuteOfDay,
-    required String message,
-    required int horizonDays,
-    required bool exact,
-  }) async {
-    for (var dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-      final when = _nextInstanceOf(minuteOfDay, dayOffset: dayOffset);
-      if (when == null || when.isBefore(DateTime.now())) continue;
+    try {
       await _plugin.zonedSchedule(
-        AkashaNotificationIds.motivation(minuteOfDay) + dayOffset,
-        'For you, Akasha',
-        message,
+        AkashaNotificationIds.snooze(snoozeId),
+        title,
+        body,
         _toTz(when),
         NotificationDetails(
           android: AndroidNotificationDetails(
-            AppConstants.channelMotivation,
-            'Encouragement',
-            importance: Importance.defaultImportance,
-            priority: Priority.defaultPriority,
-            styleInformation: BigTextStyleInformation(message),
-            category: AndroidNotificationCategory.social,
+            isMedicine ? AppConstants.channelMedicine : AppConstants.channelWater,
+            isMedicine ? 'Medicine reminders' : 'Water reminders',
+            importance: Importance.high,
+            priority: Priority.high,
+            styleInformation: BigTextStyleInformation(body),
+            actions: [
+              AndroidNotificationAction(
+                isMedicine ? AkashaActions.tookMedicine : AkashaActions.drankWater,
+                isMedicine ? 'I took it' : 'I drank water',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                isMedicine ? AkashaActions.skipMedicine : AkashaActions.skipWater,
+                'Skip',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                isMedicine
+                    ? AkashaActions.snoozeMedicine
+                    : AkashaActions.snoozeWater,
+                'Later',
+                showsUserInterface: false,
+                cancelNotification: true,
+              ),
+            ],
           ),
         ),
-        androidScheduleMode:
-            exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
-        payload: const NotificationPayload(kind: AkashaActions.payloadMotivation).encode(),
-      );
-    }
-  }
-
-  Future<void> scheduleLoveNote({
-    required String noteId,
-    required String text,
-    required String author,
-    required int minuteOfDay,
-    required int horizonDays,
-    required bool exact,
-  }) async {
-    for (var dayOffset = 0; dayOffset < horizonDays; dayOffset++) {
-      final when = _nextInstanceOf(minuteOfDay, dayOffset: dayOffset);
-      if (when == null || when.isBefore(DateTime.now())) continue;
-      await _plugin.zonedSchedule(
-        AkashaNotificationIds.loveNote(minuteOfDay) + dayOffset,
-        'A little love note',
-        text,
-        _toTz(when),
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            AppConstants.channelLoveNotes,
-            'Little love notes',
-            importance: Importance.defaultImportance,
-            styleInformation: BigTextStyleInformation('$text\n\n— $author'),
-          ),
-        ),
-        androidScheduleMode:
-            exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
+        androidScheduleMode: exact
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
         payload: NotificationPayload(
-          kind: AkashaActions.payloadLoveNote,
-          refId: noteId,
+          kind: isMedicine
+              ? AkashaActions.payloadMedicine
+              : AkashaActions.payloadWater,
+          refId: isMedicine ? refId : snoozeId,
+          value: amountMl,
+          slotMinute: originalMinute,
+          dayKey: AkashaDates.key(when),
         ).encode(),
       );
+      return true;
+    } catch (e) {
+      debugPrint('AKASHA: snooze schedule failed: $e');
+      return false;
     }
   }
 
-  Future<void> scheduleDailySummary({required int minuteOfDay, required bool exact}) async {
-    final when = _nextInstanceOf(minuteOfDay, dayOffset: 0);
-    if (when == null) return;
-    await _plugin.zonedSchedule(
-      AkashaNotificationIds.dailyReport,
-      'Your day, gently wrapped up',
-      'Tap to see how you cared for yourself today.',
-      _toTz(when.isBefore(DateTime.now()) ? when.add(const Duration(days: 1)) : when),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          AppConstants.channelDaily,
-          'Daily summary',
-          importance: Importance.low,
-          priority: Priority.low,
-          playSound: false,
-        ),
-      ),
-      androidScheduleMode:
-          exact ? AndroidScheduleMode.exactAllowWhileIdle : AndroidScheduleMode.inexact,
-      payload: const NotificationPayload(kind: AkashaActions.payloadDaily).encode(),
-    );
-  }
+  // ── Cancellation ──────────────────────────────────────────────────────────
 
-  // ── Management ──────────────────────────────────────────────────────────
-
-  /// Cancels every AKASHA reminder. Used before a full re-materialisation,
-  /// when pausing reminders, and when the user resets the app.
+  /// Cancels every AKASHA reminder. Only used before a full re-materialisation
+  /// and by "pause everything" — the planner then re-registers in the same pass,
+  /// so a crash in between costs at most one launch's reminders rather than
+  /// leaving stale ones forever.
   Future<void> cancelAll() async {
     try {
       await _plugin.cancelAll();
@@ -692,17 +623,27 @@ class NotificationService {
     }
   }
 
-  Future<void> cancelWaterSlots(Iterable<int> minutes) async {
-    for (final m in minutes) {
-      try {
-        await _plugin.cancel(AkashaNotificationIds.water(m));
-      } catch (e) {
-        debugPrint('AKASHA: cancel water $m failed: $e');
-      }
+  Future<void> cancelId(int id) async {
+    try {
+      await _plugin.cancel(id);
+    } catch (e) {
+      debugPrint('AKASHA: cancel $id failed: $e');
     }
   }
 
-  Future<PendingNotificationRequest[]> pendingRequests() async {
+  /// Cancels every water alarm for a single slot across the whole horizon.
+  Future<void> cancelWaterSlot(int minuteOfDay, {int horizonDays = 7}) async {
+    final today = AkashaDates.today();
+    for (var d = 0; d < horizonDays; d++) {
+      await cancelId(
+        AkashaNotificationIds.water(minuteOfDay, today.add(Duration(days: d))),
+      );
+    }
+  }
+
+  // ── Diagnostics ───────────────────────────────────────────────────────────
+
+  Future<List<PendingNotificationRequest>> pendingRequests() async {
     try {
       return await _plugin.pendingNotificationRequests();
     } catch (e) {
@@ -714,17 +655,15 @@ class NotificationService {
   Future<int> pendingCount() async => (await pendingRequests()).length;
 
   Future<List<ActiveNotification>> activeNotifications() async {
-    final android = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
     try {
-      return await android?.getActiveNotifications() ?? const [];
+      return await _android?.getActiveNotifications() ?? const [];
     } catch (_) {
       return const [];
     }
   }
 
-  /// Shows an immediate notification (used by "Try a reminder" diagnostics and
-  /// by the in-app reminder screen fallback).
+  /// Immediate notification, used by "try a reminder" in diagnostics and by the
+  /// spoken-reminder test button.
   Future<void> showNow({
     required int id,
     required String title,
@@ -749,26 +688,32 @@ class NotificationService {
     );
   }
 
-  /// Consumes any notification actions that arrived while the UI was alive.
   List<NotificationActionEvent> takePendingEvents() {
     final copy = List<NotificationActionEvent>.unmodifiable(_pendingEvents);
     _pendingEvents.clear();
     return copy;
   }
 
-  // ── Time helpers ────────────────────────────────────────────────────────
-
-  /// Next wall-clock instance of [minuteOfDay], optionally [dayOffset] days on.
-  /// Returns null only for invalid input.
-  DateTime? _nextInstanceOf(int minuteOfDay, {int dayOffset = 0}) {
-    if (minuteOfDay < 0 || minuteOfDay >= 24 * 60) return null;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return today.add(Duration(days: dayOffset, minutes: minuteOfDay));
-  }
-
   tz.TZDateTime _toTz(DateTime local) => tz.TZDateTime.from(local, tz.local);
+}
 
-  String _dayKey(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+/// Title + body for one notification. Separated from [PlannedAlarm] so copy can
+/// be rotated without touching scheduling, and so the same text can be spoken.
+class NotificationText {
+  const NotificationText({required this.title, required this.body});
+  final String title;
+  final String body;
+}
+
+/// Everything the UI layer reports about a notification event.
+class NotificationActionEvent {
+  const NotificationActionEvent({
+    required this.actionId,
+    required this.payload,
+    required this.respondedAt,
+  });
+
+  final int actionId;
+  final NotificationPayload payload;
+  final DateTime respondedAt;
 }

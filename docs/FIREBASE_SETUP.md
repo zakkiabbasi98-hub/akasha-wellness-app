@@ -183,13 +183,51 @@ supported mode, not an error state.
 
 ### What the function does
 
-1. Receives `{ message, recentHistory }` from an authenticated caller.
-2. **Re-checks crisis language server-side** before any model call. On a hit it
+1. Applies **strict CORS** — an `ALLOWED_ORIGINS` allow-list, never `*`.
+2. Requires a **verified Firebase ID token** (`Authorization: Bearer …`). The
+   identity comes from the verified token; **no uid is read from the body**.
+3. Optionally requires a valid **App Check** token (`ENFORCE_APP_CHECK=true`).
+4. Validates the request: message ≤1 200 chars, ≤10 history items of ≤1 200
+   chars, roles limited to `user`/`assistant`.
+5. **Re-checks crisis language server-side** before any model call. On a hit it
    returns the fixed supportive message and emergency guidance — no generation.
-3. Applies a system prompt that forbids diagnosis, dosage advice and shame.
-4. Calls an OpenAI-compatible chat-completions endpoint with the secret key.
-5. Returns `{ reply }`, truncating anything over the response cap.
-6. Never logs message content.
+6. Applies **rate limits**: 6 requests/minute and 120/day per user (sliding
+   window in Firestore), plus a global 600/minute circuit breaker.
+7. Applies a system prompt that forbids diagnosis, dosage advice and shame.
+8. Calls an OpenAI-compatible chat-completions endpoint with the secret key,
+   with a 20 s abort timeout.
+9. Returns `{ reply }`, truncating anything over the response cap.
+10. Returns only opaque error codes (`companion_unavailable`, `temporary_failure`)
+    — provider status and internal detail are logged, never sent to the client.
+11. Never logs message content.
+
+### Required configuration before the AI endpoint is safe
+
+| Setting | Where | Why |
+|---|---|---|
+| `AI_PROVIDER_KEY` | `firebase functions:secrets:set AI_PROVIDER_KEY` | keeps the key in Secret Manager, never in a file or the APK |
+| `ALLOWED_ORIGINS` | `firebase/functions/.env` | comma-separated origins; a browser request from any other origin gets 403. The Android app sends no `Origin` header and needs no entry |
+| `ENFORCE_APP_CHECK` | `.env` | leave `false` until the Android app is registered with **Play Integrity** in the Firebase console — turning it on too early rejects every request |
+
+`firebase/functions/.env.example` contains placeholders only. Never commit `.env`.
+
+### Authentication: what the app must send
+
+The client must attach a fresh ID token per request; the function verifies it
+with revocation checking enabled. A request without one receives `401
+auth_required` and is never forwarded to a model. This is what stops a stranger
+with the URL from spending the project's budget.
+
+### Firestore rules
+
+`firebase/firestore.rules` enforces: per-user scoping on every path, an explicit
+entity allow-list (an unlisted subcollection is denied), required-field
+validation on create **and** update, a `user_id`-must-match-the-authenticated-user
+check, a document-size bound, `recordId == data.id`, `ai_rate_limits` completely
+client-inaccessible, and a catch-all deny.
+
+**Not executed here.** Validating rules requires `firebase emulators:start`,
+which needs a JDK. Run the emulator suite before deploying to production.
 
 Client-side, `AiCompanionService.detectSafety()` performs the same check first, so
 a crisis message never even leaves the phone in the normal case.

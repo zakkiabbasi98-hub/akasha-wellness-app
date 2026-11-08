@@ -1,7 +1,7 @@
 name: akasha
 description: "AKASHA — Hydrate • Smile • Shine. A gentle, offline-first wellness companion for hydration, medication, mood and mind."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -39,8 +39,10 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
 
-  # Voice
-  flutter_tts: ^4.0.2
+  # NOTE: flutter_tts was removed in the repair pass. Spoken reminders are
+  # played by Android's own TextToSpeech engine from a native receiver, because
+  # a Dart TTS engine cannot run once the app process has been killed — which is
+  # precisely when a reminder needs to speak. See docs/NOTIFICATIONS.md.
 
   # Platform helpers
   permission_handler: ^11.3.1
@@ -69,6 +71,10 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   integration_test:
     sdk: flutter
+  # Runs the real SQLite engine on the host, so the schema, the migrations and
+  # the notification-idempotency ledger can be tested without a device.
+  # test/unit/notification_ledger_test.dart uses it.
+  sqflite_common_ffi: ^2.3.3
 
 flutter:
   uses-material-design: true

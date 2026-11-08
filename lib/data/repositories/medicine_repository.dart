@@ -126,6 +126,11 @@ class MedicineRepository {
   }) =>
       Ids.slotId('medlog', '$medicineId:${AkashaDates.key(day)}:$minute');
 
+  /// Id used by the *planner* — same formula, expressed once in pure code so
+  /// the notification layer does not need a repository instance.
+  static String planLogId(String medicineId, DateTime day, int minute) =>
+      Ids.slotId('medlog', '$medicineId:${AkashaDates.key(day)}:$minute');
+
   Future<void> _ensureLogRow(
     Transaction txn, {
     required String userId,
@@ -239,6 +244,79 @@ class MedicineRepository {
     // is deterministic, so the dose can be reconstructed exactly — her tap must
     // never be silently dropped.
     await _recreateLogRow(logId, patch);
+  }
+
+  /// Applies a dose response **inside an existing transaction**.
+  ///
+  /// Same semantics as [recordResponse] (including "recreate the row from its
+  /// deterministic id if it was never materialised"), but it enlists the caller's
+  /// transaction so the response and the notification dedupe marker commit
+  /// together. A dose is only ever set to `taken` on explicit user confirmation.
+  Future<void> applyResponseInTxn(
+    Transaction txn, {
+    required String logId,
+    required DoseStatus status,
+    DateTime? snoozedUntil,
+    DateTime? respondedAt,
+    String? notes,
+  }) async {
+    final responded = respondedAt ?? DateTime.now();
+    final patch = {
+      'status': status.key,
+      'responded_at': responded.millisecondsSinceEpoch,
+      'snoozed_until': snoozedUntil?.millisecondsSinceEpoch,
+      'updated_at': responded.millisecondsSinceEpoch,
+      'dirty': 1,
+      if (notes != null) 'notes': notes,
+    };
+
+    final updated = await txn.update(
+      'medicine_logs',
+      patch,
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [logId],
+    );
+    if (updated > 0) return;
+
+    // Not materialised yet — rebuild it from the deterministic id.
+    const scope = 'medlog:';
+    if (!logId.startsWith(scope)) return;
+    final parts = logId.substring(scope.length).split(':');
+    if (parts.length < 3) return;
+    final minute = int.tryParse(parts.last);
+    final dayKey = parts[parts.length - 2];
+    final medicineId = parts.sublist(0, parts.length - 2).join(':');
+    if (minute == null) return;
+
+    final medicineRows = await txn.query(
+      'medicines',
+      where: 'id = ?',
+      whereArgs: [medicineId],
+      limit: 1,
+    );
+    if (medicineRows.isEmpty) return;
+    final userId = medicineRows.first['user_id'] as String?;
+    if (userId == null) return;
+
+    await txn.insert(
+      'medicine_logs',
+      {
+        'id': logId,
+        'created_at': responded.millisecondsSinceEpoch,
+        'dirty': 1,
+        'user_id': userId,
+        'medicine_id': medicineId,
+        'schedule_id': null,
+        'day_key': dayKey,
+        'scheduled_minute': minute,
+        'responded_at': null,
+        'status': DoseStatus.scheduled.key,
+        'snoozed_until': null,
+        'notes': null,
+        ...patch,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   /// Rebuilds a single log row from a deterministic id of the form

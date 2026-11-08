@@ -461,7 +461,10 @@ class SettingsScreen extends ConsumerWidget {
     final m = int.tryParse(medium.text.trim()) ?? settings.glassSizeMl;
     final l = int.tryParse(large.text.trim()) ?? settings.largeGlassMl;
     if (s < 30 || m < 30 || l < 30) return;
-    await ref.read(settingsControllerProvider.notifier).update(
+    // Water alarms carry the glass amount in their payload, so changing the
+    // sizes must rebuild the schedule — otherwise "I drank water" from an
+    // already-scheduled notification would log the old amount.
+    await ref.read(settingsControllerProvider.notifier).updateAndReschedule(
           (current) => current.copyWith(
             smallGlassMl: s,
             glassSizeMl: m,

@@ -58,6 +58,31 @@ class MainActivity : FlutterActivity() {
                         }
                         "deviceSdkInt" -> result.success(Build.VERSION.SDK_INT)
                         "consumeRescheduleRequest" -> result.success(consumeRescheduleRequest())
+
+                        // ── Spoken reminders (native, repair R3) ────────────
+                        "applyVoicePlan" -> {
+                            val plan = call.argument<String>("plan") ?: "[]"
+                            val enabled = call.argument<Boolean>("enabled") ?: false
+                            VoiceReminderScheduler.apply(applicationContext, plan, enabled)
+                            result.success(null)
+                        }
+                        "cancelVoicePlan" -> {
+                            VoiceReminderScheduler.apply(applicationContext, "[]", false)
+                            result.success(null)
+                        }
+                        "isSpeechAvailable" -> result.success(isSpeechAvailable())
+                        "speakTest" -> {
+                            val text = call.argument<String>("text") ?: ""
+                            speakTest(text)
+                            result.success(null)
+                        }
+                        "isSilentOrDnd" -> {
+                            val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            val dnd = nm.isNotificationPolicyAccessGranted &&
+                                    nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+                            result.success(audio.ringerMode != android.media.AudioManager.RINGER_MODE_NORMAL || dnd)
+                        }
                         else -> result.notImplemented()
                     }
                 } catch (e: Exception) {
@@ -146,6 +171,37 @@ class MainActivity : FlutterActivity() {
      * occurred *before* the last successful rebuild does not cause a redundant
      * (or worse, an infinite) reschedule loop.
      */
+    /**
+     * True when the device has at least one installed TTS engine that declares
+     * English support. Launchers can then honestly grey out the voice section
+     * instead of failing silently at reminder time.
+     */
+    private fun isSpeechAvailable(): Boolean {
+        return try {
+            val intent = Intent("android.intent.action.TTS_SERVICE")
+            packageManager.queryIntentServices(intent, 0).isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Speaks a short preview immediately (Voice settings → "Hear it"). */
+    private fun speakTest(text: String) {
+        if (text.isBlank()) return
+        try {
+            var tts: android.speech.tts.TextToSpeech? = null
+            tts = android.speech.tts.TextToSpeech(applicationContext) { status ->
+                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                    tts?.language = java.util.Locale.US
+                    tts?.setSpeechRate(0.9f)
+                    tts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "akasha-preview")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("AkashaVoice", "speakTest failed: ${e.message}")
+        }
+    }
+
     private fun consumeRescheduleRequest(): Long? {
         val prefs = getSharedPreferences("akasha_native_events", Context.MODE_PRIVATE)
         val stamp = prefs.getLong("reschedule_requested_at", 0L)

@@ -3,7 +3,35 @@
 **Project:** AKASHA — Hydrate • Smile • Shine
 **Deliverable:** a complete Flutter/Android wellness application, source-available and GitHub-ready
 **Date:** 8 November 2026
-**Version:** 1.0.0+1
+**Version:** 1.1.0+2 (see REPAIR_CHANGELOG.md)
+
+---
+
+## Repair pass 1.1 — read this first
+
+A focused repair pass has since been applied on top of 1.0.0, covering seven
+reported issue groups (notification id collisions, background action delivery,
+spoken reminders, Firebase security, the Gradle wrapper, exact-alarm permissions,
+and a full notification audit). Everything it changed, why, and how far each
+claim was verified is in **[`REPAIR_CHANGELOG.md`](REPAIR_CHANGELOG.md)** —
+that document supersedes the relevant sections below.
+
+Headline changes that make parts of this report out of date:
+
+| Area | 1.0.0 (this report) | After the repair pass |
+|---|---|---|
+| Tests | 140 cases | **222 cases** |
+| Scheduling horizon | 7 days | **5 days** (alarm budget) |
+| Notification ids | one per clock time | **one per calendar occurrence** |
+| Spoken reminders | setting only, never used | **native Kotlin, works with the app closed** |
+| `flutter_tts` | dependency | **removed** (cannot run after process death) |
+| `USE_EXACT_ALARM` | declared | **removed** (Play policy risk, not needed) |
+| AI endpoint | unauthenticated, `*` CORS | **ID token + App Check + allow-list + rate limits** |
+| Gradle wrapper | missing | **restored from the official Gradle release** |
+| Database | v1, 19 tables | **v2, 20 tables** (additive migration) |
+
+The core caveat of this report is unchanged: **none of it has been compiled,
+tested or built.** See `REPAIR_CHANGELOG.md` §"What is still not verified".
 
 ---
 
@@ -196,7 +224,7 @@ lib/
 | `firebase/firebase.json`, `firebase/functions/{index.js,package.json}`, `firebase/README.md` | Optional backend |
 | `android/` | Gradle 8.3 / AGP 8.1.0 / Kotlin 1.9.10, minSdk 23, target 34, desugaring, manifest, `MainActivity.kt` (system channel), `TimeChangeReceiver.kt`, launch gradient, launcher icons, 2 custom status icons |
 | `assets/` | logo mark + READMEs explaining how to add fonts/sounds/animations |
-| `test/`, `integration_test/` | 8 files, 134 test cases |
+| `test/`, `integration_test/` | 9 files, 140 test cases (222 after the repair pass) |
 
 ---
 
@@ -327,7 +355,7 @@ Each of these was a real defect in behaviour, not a comment or naming nit.
 
 ---
 
-## 7. Tests delivered (140 cases, **not executed here**)
+## 7. Tests delivered (140 cases at 1.0.0, 222 after the repair pass — **not executed here**)
 
 | File | Cases |
 |---|---|
@@ -504,7 +532,7 @@ Those are two different claims and it matters which one is being made.
    type-checked by `dart`. This is the single largest caveat: a static audit can
    prove an import resolves, a symbol exists and braces balance, but it cannot
    prove that every generic is inferred or every `async` gap is sound.
-2. **No test has been executed.** 140 tests are written; zero have run.
+2. **No test has been executed.** 222 tests are written; zero have run.
 3. **No APK/AAB exists.** The four build commands in `BUILD_AND_RELEASE.md` have
    never been issued.
 4. **No screenshots exist.** They need a device; `docs/TESTING.md` §8 documents how.

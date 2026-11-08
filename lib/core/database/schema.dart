@@ -9,7 +9,7 @@
 ///  * Timestamps are epoch milliseconds (UTC-safe on disk, local in the app).
 ///  * Day-bucketed queries use `day_key` (`yyyy-MM-dd`) for cheap indexes.
 abstract final class DbSchema {
-  static const int version = 1;
+  static const int version = 2;
 
   /// Common sync/audit columns. `id` is TEXT because records are created
   /// offline on many devices.
@@ -39,6 +39,7 @@ abstract final class DbSchema {
     'breathing_sessions',
     'love_notes',
     'notification_history',
+    'notification_actions',
     'ai_messages',
     'sync_queue',
   ];
@@ -335,6 +336,27 @@ abstract final class DbSchema {
           status TEXT NOT NULL DEFAULT 'pending' -- pending|in_flight|failed|done
         )
         ''',
+
+        // ── Notification action ledger (repair R2) ────────────────────────
+        // One row per notification button press that has been applied to the
+        // database. The primary key IS the dedupe key, so a re-delivered
+        // broadcast, a double tap, or a replay of the durable queue affects 0
+        // rows on the second attempt and is therefore a no-op. Rows older than
+        // 14 days are pruned; the table never grows without bound.
+        //
+        // Deliberately NOT a synced table: an action being applied on this
+        // device is a local fact, and syncing it would let one device suppress
+        // another device's identical action key.
+        '''
+        CREATE TABLE notification_actions (
+          id TEXT PRIMARY KEY,             -- kind|refId|slot|value|actionId|dayKey
+          action_id INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          ref_id TEXT,
+          payload TEXT,
+          created_at INTEGER NOT NULL
+        )
+        ''',
       ];
 
   /// Indexes: created after tables so the SQL stays readable.
@@ -359,6 +381,7 @@ abstract final class DbSchema {
         'CREATE INDEX idx_love_notes_enabled ON love_notes (user_id, enabled)',
         // Ops
         'CREATE INDEX idx_notif_history_time ON notification_history (delivered_at)',
+        'CREATE INDEX idx_notif_actions_time ON notification_actions (created_at)',
         'CREATE INDEX idx_sync_queue_status ON sync_queue (status, next_attempt_at)',
         'CREATE INDEX idx_ai_messages_time ON ai_messages (user_id, created_local)',
       ];
@@ -366,7 +389,25 @@ abstract final class DbSchema {
   /// Migration hooks for future versions. Each entry upgrades FROM its key
   /// version TO key+1. Keeping this table from v1 means later releases never
   /// destroy Akasha's history.
+  ///
+  /// v1 → v2 adds `notification_actions` (the exactly-once ledger for
+  /// notification button presses). Purely additive: no existing table is
+  /// altered, so no user record can be lost by upgrading. `IF NOT EXISTS` makes
+  /// the migration safe to re-run if a previous attempt was interrupted.
   static const Map<int, List<String>> migrations = {
-    // 1: [ 'ALTER TABLE water_logs ADD COLUMN ...' ],
+    1: [
+      '''
+      CREATE TABLE IF NOT EXISTS notification_actions (
+        id TEXT PRIMARY KEY,
+        action_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        ref_id TEXT,
+        payload TEXT,
+        created_at INTEGER NOT NULL
+      )
+      ''',
+      'CREATE INDEX IF NOT EXISTS idx_notif_actions_time '
+          'ON notification_actions (created_at)',
+    ],
   };
 }

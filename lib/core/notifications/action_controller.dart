@@ -1,272 +1,120 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../../data/models/medicine_models.dart';
-import '../../data/models/water_models.dart';
-import '../../data/repositories/medicine_repository.dart';
-import '../../data/repositories/notification_history_repository.dart';
-import '../../data/repositories/profile_repository.dart';
-import '../../data/repositories/water_repository.dart';
 import '../../data/models/user_settings.dart';
+import '../database/app_database.dart';
 import '../utils/date_utils.dart';
-import '../utils/id.dart';
+import 'background_actions.dart';
 import 'notification_service.dart';
-import 'pending_action_queue.dart';
 import 'reminder_scheduler.dart';
 
-/// Turns a notification button press into real data — in every app state.
+/// UI-isolate companion to [BackgroundActionEngine].
 ///
-/// Paths covered
-/// -------------
-/// 1. App foregrounded: the plugin callback lands in [handleResponse].
-/// 2. App backgrounded: same callback, main isolate alive.
-/// 3. App terminated: Android runs the top-level entry point in a headless
-///    isolate, which can't safely touch SQLite on every OEM. It appends to
-///    [PendingActionQueue]; [drainPending] replays it into the database the
-///    next time the app starts (and on every resume).
+/// Responsibilities are deliberately narrow now (repair R2): **all** database
+/// work happens in [ActionExecutor], which the headless isolate also uses. This
+/// class only:
+///
+///  1. forwards taps that arrive while the app is alive into the same executor,
+///  2. replays the durable queue on launch and on every resume,
+///  3. tells the UI to refresh, and
+///  4. re-runs the alarm planner when an action changes the schedule.
+///
+/// The previous version re-implemented the write logic here *and* relied on
+/// statics being seeded by the main isolate, which is exactly why background
+/// actions could be lost. There is now one code path, not two.
 class NotificationActionController {
   NotificationActionController({
     required this.notifications,
-    required this.water,
-    required this.medicine,
-    required this.profiles,
-    required this.history,
     required this.scheduler,
+    required this.database,
     required this.onDataChanged,
   });
 
   final NotificationService notifications;
-  final WaterRepository water;
-  final MedicineRepository medicine;
-  final ProfileRepository profiles;
-  final NotificationHistoryRepository history;
   final ReminderScheduler scheduler;
+  final AppDatabase database;
   final void Function() onDataChanged;
 
-  /// Wire the plugin → controller bridge.
+  late final ActionExecutor _executor = ActionExecutor(database);
+
+  /// Wires the foreground tap stream. No static registration any more: the
+  /// background isolate is self-sufficient, so nothing has to survive a
+  /// process boundary in static state.
   Future<void> attach() async {
-    BackgroundActionHandler.register(handleResponse);
-    BackgroundQueueWriter.register((response, payload) async {
-      await PendingActionQueue.instance.push({
-        'actionId': response.actionId != null
-            ? int.tryParse(response.actionId!) ?? 0
-            : 0,
-        'payload': response.payload ?? '',
-      });
-    });
+    await notifications.initialize(
+      onForegroundResponse: (response) => _handleForeground(response),
+    );
   }
 
-  /// Handles a response in the main isolate. Returns false only on a hard error.
-  Future<bool> handleResponse(NotificationResponse response) async {
-    final actionId =
-        response.actionId != null ? int.tryParse(response.actionId!) ?? 0 : 0;
+  Future<void> _handleForeground(NotificationResponse response) async {
+    final actionId = int.tryParse(response.actionId ?? '') ?? 0;
     final payload = NotificationPayload.decode(response.payload);
-    if (payload == null) return false;
+    if (payload == null || actionId == 0) return;
 
-    switch (payload.kind) {
-      case AkashaActions.payloadWater:
-        await _handleWater(actionId, payload);
-      case AkashaActions.payloadMedicine:
-        await _handleMedicine(actionId, payload);
-      case AkashaActions.payloadMotivation:
-      case AkashaActions.payloadLoveNote:
-      case AkashaActions.payloadDaily:
-        await _recordOpen(payload, actionId);
-      default:
-        return false;
-    }
-    onDataChanged();
-    return true;
-  }
-
-  Future<void> _handleWater(int actionId, NotificationPayload payload) async {
-    final profile = await profiles.currentProfile();
-    if (profile == null) return;
-    final settings = await profiles.ensureSettings(profile.id);
-
-    switch (actionId) {
-      case AkashaActions.drankWater:
-        final amount = payload.value ?? settings.glassSizeMl;
-        final log = await water.addLog(
-          userId: profile.id,
-          amountMl: amount,
-          source: WaterLogSource.notification,
-          reminderMinute: payload.slotMinute,
-          glassSize: _glassLabel(amount, settings),
-        );
-        await _recordAction(
-          kind: 'water',
-          refId: log.id,
-          title: 'Water reminder',
-          body: 'Logged from notification',
-          action: 'taken',
-        );
-      case AkashaActions.skipWater:
-        await _recordAction(
-          kind: 'water',
-          refId: null,
-          title: 'Water reminder',
-          body: 'Skipped from notification',
-          action: 'skipped',
-        );
-      case AkashaActions.snoozeWater:
-        final when = DateTime.now().add(Duration(minutes: settings.snoozeMinutes));
-        final snooze = await water.createSnooze(
-          userId: profile.id,
-          reminderMinute: payload.slotMinute ?? AkashaDates.nowMinutes(),
-          scheduledFor: when,
-        );
-        await notifications.scheduleSnooze(
-          snoozeId: snooze.id,
-          amountMl: payload.value ?? settings.glassSizeMl,
-          when: when,
-          originalMinute: payload.slotMinute ?? AkashaDates.nowMinutes(),
-          isMedicine: false,
-        );
-        await _recordAction(
-          kind: 'water',
-          refId: snooze.id,
-          title: 'Water reminder',
-          body: 'Snoozed for ${settings.snoozeMinutes} minutes',
-          action: 'snoozed',
-        );
-      default:
-        await _recordOpen(payload, actionId);
-    }
-  }
-
-  Future<void> _handleMedicine(int actionId, NotificationPayload payload) async {
-    final profile = await profiles.currentProfile();
-    if (profile == null) return;
-    final settings = await profiles.ensureSettings(profile.id);
-    final logId = payload.refId;
-
-    switch (actionId) {
-      case AkashaActions.tookMedicine:
-        if (logId == null) return;
-        await medicine.recordResponse(logId: logId, status: DoseStatus.taken);
-        await _recordAction(
-          kind: 'medicine',
-          refId: logId,
-          title: 'Medicine reminder',
-          body: 'Marked as taken',
-          action: 'taken',
-        );
-      case AkashaActions.skipMedicine:
-        if (logId == null) return;
-        await medicine.recordResponse(logId: logId, status: DoseStatus.skipped);
-        await _recordAction(
-          kind: 'medicine',
-          refId: logId,
-          title: 'Medicine reminder',
-          body: 'Marked as skipped',
-          action: 'skipped',
-        );
-      case AkashaActions.snoozeMedicine:
-        if (logId == null) return;
-        final when = DateTime.now().add(Duration(minutes: settings.snoozeMinutes));
-        await medicine.recordResponse(
-          logId: logId,
-          status: DoseStatus.snoozed,
-          snoozedUntil: when,
-        );
-        await notifications.scheduleSnooze(
-          snoozeId: snoozeIdFor(logId),
-          amountMl: 0,
-          when: when,
-          originalMinute: payload.slotMinute ?? AkashaDates.nowMinutes(),
-          isMedicine: true,
-          refId: logId,
-        );
-        await _recordAction(
-          kind: 'medicine',
-          refId: logId,
-          title: 'Medicine reminder',
-          body: 'Snoozed',
-          action: 'snoozed',
-        );
-      default:
-        await _recordOpen(payload, actionId);
-    }
-  }
-
-  Future<void> _recordOpen(NotificationPayload payload, int actionId) async {
-    final profile = await profiles.currentProfile();
-    if (profile == null) return;
-    await _recordAction(
-      kind: payload.kind,
-      refId: payload.refId,
-      title: payload.kind,
-      body: 'Opened from notification',
-      action: 'opened',
+    final event = ActionEvent(
+      actionId: actionId,
+      payload: payload,
+      respondedAt: DateTime.now(),
     );
-  }
-
-  Future<void> _recordAction({
-    required String kind,
-    required String? refId,
-    required String title,
-    required String body,
-    required String action,
-  }) async {
-    final profile = await profiles.currentProfile();
-    if (profile == null) return;
-    final existing = await history.latestFor(
-      userId: profile.id,
-      kind: kind,
-      refId: refId,
-      onDay: DateTime.now(),
-    );
-    if (existing != null) {
-      await history.recordAction(id: existing.id, action: action);
-    } else {
-      final created = await history.record(
-        userId: profile.id,
-        kind: kind,
-        title: title,
-        body: body,
-        refId: refId,
-      );
-      await history.recordAction(id: created.id, action: action);
+    try {
+      final applied = await _executor.execute(event);
+      if (applied) {
+        await _executor.rescheduleIfNeeded(event);
+        onDataChanged();
+        if (_changesSchedule(actionId)) await scheduler.rescheduleAll();
+      }
+    } catch (e) {
+      debugPrint('AKASHA: foreground action failed, queueing: $e');
+      // Same durability guarantee as the background path.
+      await PendingActionQueue.instance.push({
+        'actionId': actionId,
+        'payload': response.payload ?? '',
+        'at': DateTime.now().millisecondsSinceEpoch,
+      });
     }
-  }
-
-  String? _glassLabel(int amount, UserSettings settings) {
-    if (amount == settings.smallGlassMl) return 'small';
-    if (amount == settings.glassSizeMl) return 'medium';
-    if (amount == settings.largeGlassMl) return 'large';
-    return 'custom';
   }
 
   /// Replays actions captured while the app was dead. Returns how many were
-  /// applied so the dashboard can show an honest "1 glass added while you were
-  /// away" message.
+  /// applied so the dashboard can say "1 glass added while you were away"
+  /// honestly instead of pretending nothing happened.
   Future<int> drainPending() async {
-    final queued = await PendingActionQueue.instance.drain();
-    if (queued.isEmpty) return 0;
-    var applied = 0;
-    for (final item in queued) {
-      try {
-        final response = NotificationResponse(
-          notificationId: 0,
-          actionId: (item['actionId'] as int?)?.toString(),
-          payload: item['payload'] as String?,
-        );
-        final ok = await handleResponse(response);
-        if (ok) applied++;
-      } catch (e) {
-        debugPrint('AKASHA: failed to replay queued action: $e');
-      }
-    }
+    final applied = await PendingActionQueue.instance.replay();
     if (applied > 0) {
-      await scheduler.applyWaterEdit(
-        (await profiles.currentProfile())?.id ?? 'local-profile',
-      );
       onDataChanged();
+      await scheduler.rescheduleAll();
     }
     return applied;
   }
 
-  /// Snooze id helper shared with tests.
-  static String snoozeIdFor(String logId) => Ids.slotId('medsnooze', logId);
+  /// Reads the in-memory events the plugin pushed while the UI was alive.
+  /// Kept for the diagnostics screen's "recent actions" list.
+  List<NotificationActionEvent> takePendingEvents() =>
+      notifications.takePendingEvents();
+
+  bool _changesSchedule(int actionId) =>
+      actionId == AkashaActions.snoozeWater ||
+      actionId == AkashaActions.snoozeMedicine ||
+      actionId == AkashaActions.drankWater ||
+      actionId == AkashaActions.tookMedicine;
+
+  // ── Helpers kept for the diagnostics screen ───────────────────────────────
+
+  /// Human description of what the last action did, for the settings screen.
+  static String describe(int actionId, NotificationPayload payload) {
+    final day = payload.dayKey ?? AkashaDates.key(DateTime.now());
+    return switch (actionId) {
+      AkashaActions.drankWater =>
+        'Water logged for $day at slot ${payload.slotMinute ?? 0}',
+      AkashaActions.skipWater => 'Water reminder skipped for $day',
+      AkashaActions.snoozeWater => 'Water reminder snoozed',
+      AkashaActions.tookMedicine => 'Medicine marked taken ($day)',
+      AkashaActions.skipMedicine => 'Medicine marked skipped ($day)',
+      AkashaActions.snoozeMedicine => 'Medicine snoozed',
+      _ => 'Opened from a notification',
+    };
+  }
+
+  /// Voice profile currently in force — used by the diagnostics screen so the
+  /// reported speech state matches what the scheduler actually used.
+  static VoiceProfile voiceFor(UserSettings settings) => settings.effectiveVoice;
 }

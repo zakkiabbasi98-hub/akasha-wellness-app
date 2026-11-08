@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show Importance;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models/medicine_models.dart';
@@ -16,13 +18,15 @@ import '../data/repositories/reports_repository.dart';
 import '../data/repositories/water_repository.dart';
 import '../content/seed_service.dart';
 import '../features/sync/sync_service.dart';
+import 'constants/app_constants.dart';
 import 'database/app_database.dart';
+import 'notifications/action_controller.dart';
 import 'notifications/notification_ids.dart';
 import 'notifications/notification_service.dart';
 import 'notifications/reminder_scheduler.dart';
+import 'notifications/voice_plan_service.dart';
 import 'services/lock_service.dart';
 import 'services/system_channel.dart';
-import 'services/voice_service.dart';
 import 'utils/date_utils.dart';
 
 // ─── Infrastructure ────────────────────────────────────────────────────────
@@ -35,15 +39,14 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return service;
 });
 
-final voiceServiceProvider = Provider<VoiceService>((ref) {
-  final service = VoiceService();
-  ref.onDispose(service.dispose);
-  return service;
-});
-
 final lockServiceProvider = Provider<LockService>((ref) => LockService());
 
 final systemChannelProvider = Provider<SystemChannel>((ref) => const SystemChannel());
+
+/// Bridges the spoken-reminder setting to the native Kotlin engine.
+final voicePlanServiceProvider = Provider<VoicePlanService>(
+  (ref) => VoicePlanService(ref.watch(systemChannelProvider)),
+);
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService(
@@ -98,7 +101,26 @@ final reminderSchedulerProvider = Provider<ReminderScheduler>((ref) => ReminderS
       motivations: ref.watch(motivationRepositoryProvider),
       loveNotes: ref.watch(loveNoteRepositoryProvider),
       profiles: ref.watch(profileRepositoryProvider),
+      voicePlan: ref.watch(voicePlanServiceProvider),
     ));
+
+/// Executes notification button presses and replays anything captured while
+/// the app was terminated. One instance for the whole app.
+///
+/// It shares [ActionExecutor] with the headless isolate, so a tap handled in
+/// the UI and a tap handled while the app was dead follow the identical code
+/// path.
+final notificationActionControllerProvider =
+    Provider<NotificationActionController>((ref) {
+  return NotificationActionController(
+    notifications: ref.watch(notificationServiceProvider),
+    scheduler: ref.watch(reminderSchedulerProvider),
+    database: ref.watch(databaseProvider),
+    onDataChanged: () {
+      ref.read(dataRevisionProvider.notifier).state++;
+    },
+  );
+});
 
 // ─── Bootstrapped profile / settings ───────────────────────────────────────
 
@@ -256,14 +278,16 @@ final schedulingStatusProvider = FutureProvider((ref) async {
   // Count by the same ranges AkashaNotificationIds allocates, so this screen
   // cannot disagree with the scheduler about what is pending.
   final water = pending
-      .where((p) =>
-          p.id >= AkashaNotificationIds.waterBase &&
-          p.id < AkashaNotificationIds.medicineBase)
+      .where((p) => AkashaNotificationIds.isWater(p.id))
       .length;
   final medicine = pending
-      .where((p) =>
-          p.id >= AkashaNotificationIds.medicineBase &&
-          p.id < AkashaNotificationIds.motivationBase)
+      .where((p) => AkashaNotificationIds.isMedicine(p.id))
+      .length;
+  final motivation = pending
+      .where((p) => AkashaNotificationIds.isMotivation(p.id))
+      .length;
+  final loveNotes = pending
+      .where((p) => AkashaNotificationIds.isLoveNote(p.id))
       .length;
   return SchedulingStatus(
     pendingTotal: pending.length,
@@ -276,6 +300,12 @@ final schedulingStatusProvider = FutureProvider((ref) async {
         !(await ref.read(systemChannelProvider).isIgnoringBatteryOptimizations()),
     dndActive: await ref.read(systemChannelProvider).isDndActive(),
     sdkInt: await ref.read(systemChannelProvider).deviceSdkInt(),
+    pendingMotivation: motivation,
+    pendingLoveNotes: loveNotes,
+    maxBudget: AppConstants.maxPendingAlarms,
+    channelWaterImportance: await service.channelImportance(
+      AppConstants.channelWater,
+    ),
   );
 });
 
@@ -290,6 +320,10 @@ class SchedulingStatus {
     required this.batteryOptimised,
     required this.dndActive,
     required this.sdkInt,
+    this.pendingMotivation = 0,
+    this.pendingLoveNotes = 0,
+    this.maxBudget = AppConstants.maxPendingAlarms,
+    this.channelWaterImportance,
   });
 
   final int pendingTotal;
@@ -301,6 +335,17 @@ class SchedulingStatus {
   final bool batteryOptimised;
   final bool dndActive;
   final int sdkInt;
+  final int pendingMotivation;
+  final int pendingLoveNotes;
+  final int maxBudget;
+
+  /// Null until the channel exists. `Importance.min` means she silenced water
+  /// reminders at the OS level — the app can only tell her, not undo it.
+  final Importance? channelWaterImportance;
+
+  /// True when the OS is holding fewer alarms than the app intended, which is
+  /// the single most useful signal for "why did I not get my reminder".
+  bool get hasAlarmBudgetPressure => pendingTotal >= maxBudget;
 }
 
 /// Theme mode for MaterialApp.
