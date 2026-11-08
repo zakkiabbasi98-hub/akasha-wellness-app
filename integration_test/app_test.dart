@@ -170,7 +170,9 @@ void main() {
       return;
     }
 
-    for (final label in <String>['Water', 'Medicine', 'Mind & Soul', 'Profile']) {
+    // These must match the NavigationDestination labels in app_nav.dart exactly;
+    // the mind tab is labelled 'Mind', not 'Mind & Soul'.
+    for (final label in <String>['Home', 'Water', 'Medicine', 'Mind', 'Profile']) {
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle(const Duration(seconds: 4));
       expect(find.byType(ErrorWidget), findsNothing,

@@ -178,3 +178,40 @@ sound, and the proof is yours to run.**
   code, not the test.
 * Pin user-visible copy only where the wording *is* the requirement (safety text,
   crisis guidance, empty states). Otherwise assert structure, not sentences.
+
+---
+
+## 8. Capturing screenshots
+
+`docs/screenshots/` is deliberately empty in this repository — the images are
+produced on a real device, because the design language (soft gradients,
+hairline borders, hand-painted droplet) does not survive an emulated renderer
+faithfully enough to be worth publishing.
+
+To generate them:
+
+1. `flutter run --release` on a physical Android device (or an emulator at
+   1080 × 2340, 400 dpi).
+2. Complete onboarding so the screens are not all empty states.
+3. Capture in this order, so the repository listing matches the README narrative:
+
+   | File | Screen |
+   |---|---|
+   | `01-onboarding.png` | Onboarding, page 1 |
+   | `02-home.png` | Home dashboard, water goal part-met |
+   | `03-water.png` | Water tab |
+   | `04-medicine.png` | Medicine tab with one active medicine |
+   | `05-mind.png` | Mind tab |
+   | `06-journal.png` | Journal editor, mid-entry |
+   | `07-breathing.png` | Breathing session, animation mid-cycle |
+   | `08-reports.png` | Weekly report |
+   | `09-calendar.png` | Calendar with a month of dots |
+   | `10-settings.png` | Settings |
+
+4. `adb exec-out screencap -p > docs/screenshots/02-home.png` (or
+   `flutter screenshot`).
+5. Use a device with a **light** system theme: the app follows the system
+   brightness, and a dark capture will not match the palette quoted in
+   `ARCHITECTURE.md`.
+
+Nothing in the build, the tests or the app depends on these files.

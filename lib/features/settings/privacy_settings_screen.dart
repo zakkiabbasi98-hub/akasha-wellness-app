@@ -231,7 +231,8 @@ class _PrivacySettingsScreenState
                               'reply. API keys are held server-side and never shipped in '
                               'the app.\n\n'
                               'You can export your data, delete individual records, or '
-                              'erase everything from this device at any time in Settings.',
+                              'erase everything from this device at any time. The export '
+                              'and erase controls live in Settings › Privacy & data.',
                               style: TextStyle(fontSize: 13, height: 1.6),
                             ),
                           ),

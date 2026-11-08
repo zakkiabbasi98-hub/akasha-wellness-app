@@ -474,3 +474,67 @@ a machine with Flutter installed.
 treat, or advise on medication. If you are in crisis, please reach out to a real
 person — the app will tell you the same thing, and it will not pretend it can
 help you alone.*
+
+---
+
+## 11. Is the app "complete"?
+
+Short answer: **the code is complete; the app is not yet proven to run.**
+
+Those are two different claims and it matters which one is being made.
+
+### What "complete" means here — and it is genuinely done
+
+| Layer | State |
+|---|---|
+| Screens | **37** implemented, every one reachable from the tab bar or a tile that was verified to point at a real route |
+| Navigation | 35 routes, declared as data, unit-tested against the constants (this is how 10 broken paths were caught) |
+| Database | 19 tables, schema v1, migrations wired, unique indexes, soft deletes, dirty-flag sync contract |
+| Repositories | Water, medicine, mind, journal, gratitude, reflection, love notes, reports, profile, notifications, sync |
+| Notifications | 7 id bands, exact-alarm fallback, quiet hours, snooze, reschedule-on-boot/timezone-change |
+| Sync | Conflict rules, local-only fallback, three modes, wipe-safety |
+| Onboarding & safety | Consent flow, AI opt-in with crisis interception, no shaming copy |
+| Tests | **140 cases** across 9 files, written and statically audited |
+| Docs | 8 documents — architecture, database, notifications, Firebase, build/release, privacy, testing, this report |
+| Build config | Gradle, manifest with permissions, signing template, R8 rules, Firebase config template |
+
+### What is *not* done — and cannot be done from here
+
+1. **No compiler or analyzer has ever seen this code.** Not one line has been
+   type-checked by `dart`. This is the single largest caveat: a static audit can
+   prove an import resolves, a symbol exists and braces balance, but it cannot
+   prove that every generic is inferred or every `async` gap is sound.
+2. **No test has been executed.** 140 tests are written; zero have run.
+3. **No APK/AAB exists.** The four build commands in `BUILD_AND_RELEASE.md` have
+   never been issued.
+4. **No screenshots exist.** They need a device; `docs/TESTING.md` §8 documents how.
+5. **Nothing has been on a phone.** Notification delivery, exact-alarm behaviour,
+   Doze mode, battery-optimisation prompt, keyboard insets and animation timing
+   are all unobserved.
+
+### The realistic first-run expectation
+
+Whoever runs this for the first time should expect to fix **compile errors** —
+typically a handful, in the region of 10–40, spread across generics, imports and
+newer API surface. This is normal for code of this size written without a
+compiler, and it is why §9 exists. Expect the *design* to work and the *signatures*
+to need adjusting. The logic is not the risk; the type-checking is.
+
+The dependency versions in `pubspec.yaml` are pinned to a consistent set but were
+never resolved, so `flutter pub get` is the very first thing to run, and it may
+ask for a version bump.
+
+### Recommended order to finish
+
+```
+flutter pub get
+flutter analyze          # expect errors — work them until clean
+flutter test             # 140 cases; fix the code, not the requirements
+flutter build apk --debug
+flutter run              # walk the notification matrix in TESTING.md §5
+flutter build appbundle --release
+```
+
+The one-line verdict: **feature-complete and statically consistent, unverified on
+any compiler.** Calling it finished would be dishonest; calling it unfinished
+understates how much is actually there.

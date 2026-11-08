@@ -32,9 +32,10 @@ owner created:
 ## Screenshots
 
 Screenshots live in `docs/screenshots/`. They are generated from the running app
-on a real Android device/emulator — see `docs/TESTING.md` for the capture
-procedure. (If that folder is empty in your checkout, it simply means the app has
-not been run on your machine yet; nothing in the app depends on them.)
+on a real Android device — the exact capture procedure and file list are in
+[`docs/TESTING.md` §8](docs/TESTING.md#8-capturing-screenshots). The folder is
+empty in a fresh checkout because the images require a device to produce; nothing
+in the build, the tests or the app depends on them.
 
 Design language: soft pastel pink → lavender → powder blue, 24–28 px card radii,
 hairline borders, violet-tinted shadows, hand-painted water droplet and progress
