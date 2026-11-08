@@ -145,6 +145,7 @@ class _SyncSettingsScreenState extends ConsumerState<SyncSettingsScreen> {
                                     .read(syncServiceProvider)
                                     .enableSync(enable: value);
                                 ref.invalidate(settingsProvider);
+                                if (!mounted) return;
                                 setState(() {});
                               },
                               title: const Text(
@@ -285,12 +286,13 @@ class _SyncSettingsScreenState extends ConsumerState<SyncSettingsScreen> {
                               confirmLabel: 'Delete cloud data',
                               destructive: true,
                             );
-                            if (!ok) return;
+                            if (!ok || !mounted) return;
                             setState(() => _busy = true);
                             try {
                               await ref
                                   .read(syncServiceProvider)
                                   .deleteCloudAccount();
+                              if (!mounted) return;
                               setState(() {
                                 _busy = false;
                                 _message = 'Cloud data removed.';

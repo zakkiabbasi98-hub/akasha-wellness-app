@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/models/medicine_models.dart';
 import '../../data/models/mind_models.dart';
@@ -184,7 +183,7 @@ class _MonthGrid extends StatelessWidget {
           ? AppColors.success
           : level >= 1
               ? AppColors.skyBlue
-              : Colors.transparent;
+              : AppColors.white.withValues(alpha: 0);
       cells.add(
         GestureDetector(
           onTap: () => onSelect(date),
@@ -194,7 +193,9 @@ class _MonthGrid extends StatelessWidget {
               shape: BoxShape.circle,
               color: isSelected
                   ? AppColors.purple
-                  : (level > 0 ? color.withValues(alpha: .16) : Colors.transparent),
+                  : (level > 0
+                      ? color.withValues(alpha: .16)
+                      : AppColors.white.withValues(alpha: 0)),
               border: isToday && !isSelected
                   ? Border.all(color: AppColors.primaryPink, width: 1.4)
                   : null,
@@ -205,7 +206,7 @@ class _MonthGrid extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11.5,
                   fontWeight: isSelected || isToday ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppColors.darkText,
+                  color: isSelected ? AppColors.white : AppColors.darkText,
                 ),
               ),
             ),

@@ -288,7 +288,7 @@ class _FeatureTile extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, size: 20, color: Colors.white),
+            child: Icon(icon, size: 20, color: AppColors.white),
           ),
           const SizedBox(width: 12),
           Expanded(

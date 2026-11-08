@@ -143,7 +143,7 @@ class _Segmented extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .72),
+        color: AppColors.white.withValues(alpha: .72),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: AppColors.hairline),
       ),
@@ -171,7 +171,7 @@ class _Segmented extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12.5,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? Colors.white : AppColors.secondaryText,
+                    color: selected ? AppColors.white : AppColors.secondaryText,
                   ),
                 ),
               ),

@@ -96,8 +96,8 @@ class _MoodScreenState extends ConsumerState<MoodScreen> {
                         decoration: BoxDecoration(
                           color: selected
                               ? Color.alphaBlend(
-                                  color.withValues(alpha: .18), Colors.white)
-                              : Colors.white.withValues(alpha: .72),
+                                  color.withValues(alpha: .18), AppColors.white)
+                              : AppColors.white.withValues(alpha: .72),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: selected ? color : AppColors.hairline,
@@ -200,7 +200,7 @@ class _MoodScreenState extends ConsumerState<MoodScreen> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                              strokeWidth: 2, color: AppColors.white),
                         )
                       : Text(_mood == null ? 'Choose a feeling' : 'Save check-in'),
                 ),

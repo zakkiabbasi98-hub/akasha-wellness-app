@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../content/motivation_content.dart';
 import '../../core/database/app_database.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -93,6 +92,7 @@ class _AiCompanionScreenState extends ConsumerState<AiCompanionScreen> {
       updatedAt: DateTime.now(),
     );
     await AppDatabase.instance.db.insert('ai_messages', userMessage.toRow());
+    if (!mounted) return;
     setState(() {
       _messages.add(userMessage);
       _controller.clear();
@@ -206,7 +206,7 @@ class _AiCompanionScreenState extends ConsumerState<AiCompanionScreen> {
               14 + MediaQuery.of(context).viewInsets.bottom,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .9),
+              color: AppColors.white.withValues(alpha: .9),
               border: const Border(
                 top: BorderSide(color: AppColors.hairline),
               ),
@@ -263,11 +263,11 @@ class _AiCompanionScreenState extends ConsumerState<AiCompanionScreen> {
                                 padding: EdgeInsets.all(14),
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: AppColors.white,
                                 ),
                               )
                             : const Icon(Icons.arrow_upward_rounded,
-                                size: 20, color: Colors.white),
+                                size: 20, color: AppColors.white),
                       ),
                     ),
                   ],
@@ -310,7 +310,7 @@ class _Bubble extends StatelessWidget {
           gradient: isUser
               ? const LinearGradient(colors: AppColors.pinkLavender)
               : null,
-          color: isUser ? null : Colors.white,
+          color: isUser ? null : AppColors.white,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -353,7 +353,7 @@ class _Bubble extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.55,
-                color: isUser ? Colors.white : AppColors.darkText,
+                color: isUser ? AppColors.white : AppColors.darkText,
               ),
             ),
             const SizedBox(height: 4),
@@ -362,7 +362,7 @@ class _Bubble extends StatelessWidget {
               style: TextStyle(
                 fontSize: 9,
                 color: isUser
-                    ? Colors.white.withValues(alpha: .75)
+                    ? AppColors.white.withValues(alpha: .75)
                     : AppColors.secondaryText,
               ),
             ),
@@ -384,7 +384,7 @@ class _TypingBubble extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.hairline),
         ),

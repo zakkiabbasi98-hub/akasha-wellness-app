@@ -292,6 +292,7 @@ class _HistoryTile extends StatelessWidget {
                     ],
                   ),
                 );
+                controller.dispose();
                 if (result != null) onEdit(result);
               }
             },

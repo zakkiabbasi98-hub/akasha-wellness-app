@@ -189,7 +189,7 @@ class WaterReminderSettingsScreen extends ConsumerWidget {
                                       fontSize: 11.5,
                                       fontWeight: FontWeight.w600,
                                       color: selected
-                                          ? Colors.white
+                                          ? AppColors.white
                                           : AppColors.darkText,
                                     ),
                                   ),

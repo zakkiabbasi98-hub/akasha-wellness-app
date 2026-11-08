@@ -71,6 +71,29 @@ abstract final class AppColors {
   // stays in exactly one file (see CONTRIBUTING.md → "Design tokens").
   static const Color warmBrown = Color(0xFF8A6337);   // text on soft peach
   static const Color deepPurple = Color(0xFF9270C8);  // legacy tint alias
+  static const Color primaryPinkOverlay = Color(0x22F2A9CE); // slider glow
+
+  // ── Light-scheme container / on-colour pairs used by the theme ─────────────
+  static const Color onSecondaryContainer = Color(0xFF7A4E68);
+  static const Color onTertiary = Color(0xFF284B69);
+  static const Color onTertiaryContainer = Color(0xFF35566F);
+  static const Color errorContainer = Color(0xFFFCE9EE);
+  static const Color onErrorContainer = Color(0xFF8C3F55);
+  static const Color scrim = Color(0x33493B58);
+
+  // ── Dark-scheme counterparts ───────────────────────────────────────────────
+  static const Color darkOnPrimary = Color(0xFF35234F);
+  static const Color darkOnSecondary = Color(0xFF4A2440);
+  static const Color darkSecondaryContainer = Color(0xFF46304F);
+  static const Color darkOnTertiary = Color(0xFF1E3A52);
+  static const Color darkTertiaryContainer = Color(0xFF2F3B4A);
+  static const Color darkError = Color(0xFFE8A0B4);
+  static const Color darkOnError = Color(0xFF43101F);
+  static const Color darkErrorContainer = Color(0xFF4A2430);
+  static const Color darkOnErrorContainer = Color(0xFFF6D7E0);
+  static const Color darkOutline = Color(0xFF4A3B58);
+  static const Color darkOutlineVariant = Color(0xFF3A2E47);
+  static const Color darkScrim = Color(0x99000000);
   static const Color roseDeep = Color(0xFFE38AAE);    // pressed rose / emphasis
   static const Color skyDeep = Color(0xFF7FB6EA);     // deep water accent
 

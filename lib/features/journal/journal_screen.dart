@@ -61,7 +61,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         child: FloatingActionButton.extended(
           onPressed: () => context.push(Routes.journalEditor),
           backgroundColor: AppColors.purple,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.white,
           icon: const Icon(Icons.edit_rounded, size: 18),
           label: const Text(
             'Write',
@@ -180,7 +180,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.purple : Colors.white.withValues(alpha: .7),
+            color: isSelected ? AppColors.purple : AppColors.white.withValues(alpha: .7),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: isSelected ? AppColors.purple : AppColors.hairline,
@@ -191,7 +191,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: isSelected ? Colors.white : AppColors.darkText,
+              color: isSelected ? AppColors.white : AppColors.darkText,
             ),
           ),
         ),

@@ -41,9 +41,10 @@ flutter run --profile                 # performance profiling on a device
 | `test/unit/date_and_settings_test.dart` | 19 | Day keys, Monday-based weeks, month bounds (incl. leap February), millis round-trip, `minutesToLabel` wrapping, time parsing, quiet hours both same-day and overnight, "identical start/end means no quiet window", `lastNDays`, greeting buckets, constant values (540 / 0 / 60 / 16 / glass sizes), validator bounds |
 | `test/unit/models_test.dart` | 23 | Row round-trips for settings/logs/medicines/journal/mood, `glassesTarget` rounding (incl. zero target), dirty-on-write, theme + voice + source + status key round-trips, weekday/date-range due rules, **"an unanswered dose is never implicitly taken"**, `isAnswered` for terminal statuses only, `scheduledAt` composition, gratitude `items` skipping empty slots, `MoodType.fromKey('nonsense')` → `null` |
 | `test/unit/motivation_content_test.dart` | 8 | ≥100 messages with no empty category, every category present, no duplicates, **no shaming language** (banned-phrase scan), ≤160 chars, water/medicine notification copy well formed, crisis text points to a real person and emergency help |
+| `test/unit/routing_test.dart` | 6 | Every `Routes.*` constant exists in the real route tree; no duplicate or malformed paths; settings stay under Profile and reports/calendar/history under Home (this suite caught **seven dead navigation tiles**) |
 | `test/unit/sync_logic_test.dart` | 14 | The real `SyncConflictRules` implementation (not a copy): clean row accepts cloud, newer local change never overwritten, newer cloud wins, tie keeps the local row for re-upload, pushed rows are not requeued, tombstones; `LocalOnlyBackend` never reports itself as available; AI `detectSafety` distinguishes sadness from crisis; the offline fallback never claims to be a therapist; crisis messages return real-world support and set `isCrisis` |
 
-Total: **93 unit tests.**
+Total: **99 unit tests.**
 
 Because `MainActivity` also exposes a native channel, the tests that touch
 Platform code (`SystemChannel`, notifications, TTS, biometrics) are deliberately
@@ -62,7 +63,7 @@ Total: **36 widget tests.** Widget tests wrap the widget in the real
 `AppTheme.light()` inside a phone-sized surface, so a theme regression fails a
 widget test rather than shipping.
 
-**Grand total: 134 test cases** (93 unit + 36 widget + 5 integration).
+**Grand total: 140 test cases** (99 unit + 36 widget + 5 integration).
 
 ---
 

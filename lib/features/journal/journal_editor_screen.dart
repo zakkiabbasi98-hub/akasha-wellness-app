@@ -171,7 +171,7 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 11, vertical: 7),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .8),
+                                color: AppColors.white.withValues(alpha: .8),
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(color: AppColors.hairline),
                               ),
@@ -204,7 +204,7 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                         decoration: BoxDecoration(
                           color: selected
                               ? moodColor(mood).withValues(alpha: .18)
-                              : Colors.white.withValues(alpha: .7),
+                              : AppColors.white.withValues(alpha: .7),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
                             color: selected
@@ -292,7 +292,7 @@ class _JournalEditorScreenState extends ConsumerState<JournalEditorScreen> {
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
+                              strokeWidth: 2, color: AppColors.white),
                         )
                       : const Text('Save entry'),
                 ),

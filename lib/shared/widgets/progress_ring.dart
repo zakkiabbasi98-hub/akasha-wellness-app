@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 
 /// Animated gradient progress ring with a water-fill option.
 ///

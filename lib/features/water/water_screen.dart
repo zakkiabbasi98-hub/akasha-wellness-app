@@ -81,7 +81,7 @@ class _WaterBody extends ConsumerWidget {
 
     return RefreshIndicator(
       color: AppColors.primaryPink,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       onRefresh: () async {
         ref.invalidate(todayWaterProvider);
         ref.invalidate(waterRemindersProvider);

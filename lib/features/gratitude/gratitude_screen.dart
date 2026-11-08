@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/models/mind_models.dart';
 import '../../shared/widgets/akasha_text_field.dart';
@@ -135,7 +134,7 @@ class _GratitudeScreenState extends ConsumerState<GratitudeScreen> {
                                   height: 18,
                                   width: 18,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white),
+                                      strokeWidth: 2, color: AppColors.white),
                                 )
                               : const Text('Save for today'),
                         ),

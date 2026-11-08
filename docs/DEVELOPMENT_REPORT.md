@@ -279,6 +279,13 @@ exit status was 0 and their output is summarised exactly.
 | 6.7 | Notification-id scheme | One scheme only (`AkashaNotificationIds`); the legacy `Ids.notificationIdSeed` hash was **removed**; the diagnostics screen now counts pending alarms by that class's bands instead of hard-coded numbers |
 | 6.8 | Firestore rules vs synced entity list | Rules allow-listed exactly the 10 synced entities; docs corrected to match |
 | 6.9 | Firebase function syntax | `node --check firebase/functions/index.js` → **OK**; all JSON configs parse → **OK** |
+| 6.10 | Dart brace/paren/bracket balance with a real lexer (comments and all string forms handled) | **0 of 106 files imbalanced** |
+| 6.11 | Navigation graph — every `Routes.*` constant checked against the actual `GoRoute` nesting | **10 constants were wrong** (see bug 9) → fixed, tree now declared as data and unit-tested |
+| 6.11b | `AppColors.white` / `Colors.white` consistency | 29 files normalised to the palette token; 0 `Colors.white` left outside `app_colors.dart` |
+| 6.12 | Unused imports | **20 removed** (kept ones that supply extension methods, e.g. `date_utils`) |
+| 6.13 | `setState` / `context` / toast after `await` without a `mounted` guard | **7 guards added**, 2 false positives verified by hand |
+| 6.14 | Controller lifecycle — every `TextEditingController`/`AnimationController` in a `StatefulWidget` | **2 leaks fixed** (bottom sheet + dialog controllers were never disposed) |
+| 6.15 | Colour literals in `app_theme.dart` | 30 raw literals → **0** (85 named tokens total) |
 
 ### Bugs found by these audits and fixed
 
@@ -302,12 +309,25 @@ exit status was 0 and their output is summarised exactly.
 7. **Shaming copy in the message library** ("Disappointing someone is survivable")
    removed; the banned-phrase test now also catches "excuses"/"you failed".
 8. `NotificationHistoryRepository._db` was `dynamic` → typed as `AppDatabase`.
+9. **Seven Settings tiles were dead buttons.** `Routes.waterSettings` and six
+   siblings pointed at `/settings/*`, but the router nests settings under
+   `/profile/settings/*`, so every one of them hit the error page. `Routes.report`,
+   `.calendar` and `.notificationHistory` were wrong the same way. All ten
+   constants corrected, the tree is now declared as `RouteTree.all`, and
+   `test/unit/routing_test.dart` asserts constants ↔ tree agreement forever.
+10. **Journal-only days were invisible in the calendar.** `activityMap` clamped a
+    missing entry to 0, so a day with only a journal entry (or only a mood) got
+    intensity 0 and rendered as empty — while the day-detail panel below said
+    "Journal: 1 entry". Now any record marks the day.
+11. **Two controller leaks** in a bottom sheet and an edit dialog.
+12. **Seven unguarded post-`await` UI updates** that could call `setState` on a
+    disposed widget (crash in tests, red screen in debug builds).
 
 Each of these was a real defect in behaviour, not a comment or naming nit.
 
 ---
 
-## 7. Tests delivered (134 cases, **not executed here**)
+## 7. Tests delivered (140 cases, **not executed here**)
 
 | File | Cases |
 |---|---|
@@ -316,11 +336,12 @@ Each of these was a real defect in behaviour, not a comment or naming nit.
 | `test/unit/models_test.dart` | 24 — row round-trips, `glassesTarget`, due rules, **never implicitly taken**, `isAnswered`, dirty-on-write |
 | `test/unit/motivation_content_test.dart` | 8 — ≥100 messages, no empty category, no duplicates, no shaming language, crisis text |
 | `test/unit/sync_logic_test.dart` | 14 — the real `SyncConflictRules`, `LocalOnlyBackend`, AI crisis detection, offline fallback |
+| `test/unit/routing_test.dart` | 6 — every route constant exists in the tree, no duplicates, sub-pages stay inside their branch (the regression that caught 7 dead tiles) |
 | `test/widget/design_system_test.dart` | 21 — palette, radii, shadows, cards, ring, droplet, states, nav semantics |
 | `test/widget/dashboard_widgets_test.dart` | 15 — water maths and copy, medicine states, mood card, shortcuts, self-care/motivation |
 | `integration_test/app_test.dart` | 5 device flows — boot, seed, persistence across DB restart, medicine honesty, tab walk |
 
-Breakdown: **93 unit + 36 widget + 5 integration = 134 cases** across 8 files.
+Breakdown: **99 unit + 36 widget + 5 integration = 140 cases** across 9 files.
 
 Conflict resolution is no longer "tested via a copy of the logic": the rule lives
 in `lib/features/sync/conflict_rules.dart` and the production merge calls it, so
@@ -439,7 +460,7 @@ Step-by-step with troubleshooting: **`docs/FIREBASE_SETUP.md`**.
 | Reports, calendar, history on real data | **written** |
 | Offline-first SQLite (19 tables) + optional sync with conflict rules | **written** |
 | Android build config, manifest, Kotlin receivers | **written** |
-| 134 automated tests + integration flow | **written, not executed** |
+| 140 automated tests + integration flow | **written, not executed** |
 | Docs (README, LICENSE, CONTRIBUTING, 7 docs, example configs) | **written** |
 | Scripted static verification | **executed — 9 audits, 0 broken references** |
 | `flutter analyze` / `flutter test` / APK build | **not executed — environment has no SDK** |

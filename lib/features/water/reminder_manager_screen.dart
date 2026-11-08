@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/providers.dart';
 import '../../core/routing/app_router.dart';
@@ -344,7 +343,7 @@ class _WindowCard extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: selected ? Colors.white : AppColors.darkText,
+                      color: selected ? AppColors.white : AppColors.darkText,
                     ),
                   ),
                 ),

@@ -72,7 +72,7 @@ class _DashboardBody extends ConsumerWidget {
 
     return RefreshIndicator(
       color: AppColors.primaryPink,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       onRefresh: () async {
         ref.invalidate(todayWaterProvider);
         ref.invalidate(todayDosesProvider);
@@ -321,7 +321,7 @@ class _HeaderIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white.withValues(alpha: .8),
+      color: AppColors.white.withValues(alpha: .8),
       shape: const CircleBorder(),
       child: InkWell(
         onTap: onTap,
@@ -559,7 +559,7 @@ class _AddButton extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: AppShadows.tinted(AppColors.skyBlue),
         ),
-        child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+        child: const Icon(Icons.add_rounded, color: AppColors.white, size: 24),
       ),
     );
   }

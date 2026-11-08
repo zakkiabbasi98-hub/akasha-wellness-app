@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/models/mind_models.dart';
 import '../../shared/widgets/app_nav.dart';
@@ -248,7 +247,7 @@ class _MoodHistoryScreenState extends ConsumerState<MoodHistoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? AppColors.purple : Colors.white.withValues(alpha: .7),
+          color: selected ? AppColors.purple : AppColors.white.withValues(alpha: .7),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: selected ? AppColors.purple : AppColors.hairline),
         ),
@@ -257,7 +256,7 @@ class _MoodHistoryScreenState extends ConsumerState<MoodHistoryScreen> {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : AppColors.darkText,
+            color: selected ? AppColors.white : AppColors.darkText,
           ),
         ),
       ),

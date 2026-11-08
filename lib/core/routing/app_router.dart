@@ -71,18 +71,73 @@ abstract final class Routes {
   static const loveNotes = '/mind/love-notes';
   static const aiCompanion = '/mind/companion';
 
-  static const report = '/reports';
-  static const calendar = '/calendar';
-  static const notificationHistory = '/notifications';
+  // Reports / calendar / history live inside the Home branch so the bottom
+  // navigation keeps Home selected while they are open.
+  static const report = '/home/reports';
+  static const calendar = '/home/calendar';
+  static const notificationHistory = '/home/notifications';
 
-  static const settings = '/settings';
-  static const waterSettings = '/settings/water';
-  static const voiceSettings = '/settings/voice';
-  static const notificationSettings = '/settings/notifications';
-  static const privacySettings = '/settings/privacy';
-  static const syncSettings = '/settings/sync';
-  static const diagnostics = '/settings/diagnostics';
-  static const about = '/settings/about';
+  // Settings live inside the Profile branch (pushing them onto the Water or
+  // Mind branch would leave the wrong tab highlighted).
+  static const settings = '/profile/settings';
+  static const waterSettings = '/profile/settings/water';
+  static const voiceSettings = '/profile/settings/voice';
+  static const notificationSettings = '/profile/settings/notifications';
+  static const privacySettings = '/profile/settings/privacy';
+  static const syncSettings = '/profile/settings/sync';
+  static const diagnostics = '/profile/settings/diagnostics';
+  static const about = '/profile/settings/about';
+}
+
+/// The route tree as data.
+///
+/// [Routes] holds the constants; this list holds every location that actually
+/// exists in the `GoRouter` below. `test/unit/routing_test.dart` asserts the two
+/// agree — that is what prevents another dead navigation tile from shipping
+/// (seven were found this way, all pointing at `/settings/*`).
+abstract final class RouteTree {
+  static const List<String> all = [
+    Routes.splash,
+    Routes.onboarding,
+    Routes.lock,
+
+    Routes.home,
+    Routes.report,
+    Routes.calendar,
+    Routes.notificationHistory,
+
+    Routes.water,
+    Routes.waterReminders,
+    Routes.waterReminderAdd,
+    Routes.waterHistory,
+    Routes.waterStats,
+
+    Routes.medicine,
+    Routes.medicineAdd,
+    Routes.medicineHistory,
+
+    Routes.mind,
+    Routes.motivation,
+    Routes.journal,
+    Routes.journalEditor,
+    Routes.mood,
+    Routes.moodHistory,
+    Routes.breathing,
+    Routes.gratitude,
+    Routes.reflection,
+    Routes.loveNotes,
+    Routes.aiCompanion,
+
+    Routes.profile,
+    Routes.settings,
+    Routes.waterSettings,
+    Routes.voiceSettings,
+    Routes.notificationSettings,
+    Routes.privacySettings,
+    Routes.syncSettings,
+    Routes.diagnostics,
+    Routes.about,
+  ];
 }
 
 final _rootKey = GlobalKey<NavigatorState>();

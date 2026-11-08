@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../shared/widgets/app_dialog.dart';
 import '../../shared/widgets/app_nav.dart';
@@ -50,7 +49,7 @@ class ProfileScreen extends ConsumerWidget {
                         height: 86,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white,
+                          color: AppColors.white,
                         ),
                         child: Center(
                           child: Text(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_tokens.dart';
@@ -153,7 +152,7 @@ class _ReflectionScreenState extends ConsumerState<ReflectionScreen> {
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColors.white,
                         ),
                       ),
                     ),
@@ -240,7 +239,7 @@ class _ReflectionScreenState extends ConsumerState<ReflectionScreen> {
                               height: 18,
                               width: 18,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
+                                  strokeWidth: 2, color: AppColors.white),
                             )
                           : Text(isLast ? 'Save reflection' : 'Next'),
                     ),
@@ -310,7 +309,7 @@ class _ReflectionScreenState extends ConsumerState<ReflectionScreen> {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(colors: AppColors.lavenderBlue),
                 ),
-                child: const Icon(Icons.spa_rounded, color: Colors.white, size: 26),
+                child: const Icon(Icons.spa_rounded, color: AppColors.white, size: 26),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -405,7 +404,7 @@ class _FinalStep extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: selected
                       ? AppColors.softPink
-                      : Colors.white.withValues(alpha: .7),
+                      : AppColors.white.withValues(alpha: .7),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
                     color: selected ? AppColors.primaryPink : AppColors.hairline,

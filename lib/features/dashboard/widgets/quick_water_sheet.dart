@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_tokens.dart';
 import '../../../data/models/water_models.dart';
 import '../../../shared/widgets/soft_card.dart';
 import '../../../shared/widgets/states.dart';
@@ -17,7 +16,7 @@ Future<void> showQuickWaterSheet(BuildContext context, WidgetRef ref) async {
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    backgroundColor: AppColors.white,
     builder: (_) => const _QuickWaterSheet(),
   );
 }
@@ -208,7 +207,7 @@ class _GlassOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: Color.alphaBlend(color.withValues(alpha: .12), Colors.white),
+          color: Color.alphaBlend(color.withValues(alpha: .12), AppColors.white),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: highlighted ? color : color.withValues(alpha: .35),

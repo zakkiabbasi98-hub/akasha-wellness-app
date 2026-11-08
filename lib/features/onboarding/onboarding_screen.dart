@@ -554,7 +554,7 @@ class _BottomBar extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
-                          color: Colors.white,
+                          color: AppColors.white,
                         ),
                       )
                     : Row(
@@ -661,7 +661,7 @@ class _StoryArt extends StatelessWidget {
             height: 148,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: .72),
+              color: AppColors.white.withValues(alpha: .72),
               border: Border.all(color: AppColors.white, width: 2),
               boxShadow: AppShadows.soft,
             ),
@@ -741,7 +741,7 @@ class _ChoiceRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.softPink : Colors.white.withValues(alpha: .7),
+                  color: isSelected ? AppColors.softPink : AppColors.white.withValues(alpha: .7),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isSelected ? AppColors.primaryPink : AppColors.hairline,
@@ -780,7 +780,7 @@ class _MiniChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? AppColors.purple : Colors.white,
+          color: selected ? AppColors.purple : AppColors.white,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: selected ? AppColors.purple : AppColors.hairline),
         ),
@@ -789,7 +789,7 @@ class _MiniChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : AppColors.darkText,
+            color: selected ? AppColors.white : AppColors.darkText,
           ),
         ),
       ),
@@ -835,7 +835,7 @@ class _TimeButton extends StatelessWidget {
               builder: (context, child) => Theme(
                 data: Theme.of(context).copyWith(
                   timePickerTheme: TimePickerThemeData(
-                    backgroundColor: Colors.white,
+                    backgroundColor: AppColors.white,
                     shape: RoundedRectangleBorder(borderRadius: AppRadius.cardR),
                   ),
                 ),
@@ -847,7 +847,7 @@ class _TimeButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColors.white,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.hairline),
             ),

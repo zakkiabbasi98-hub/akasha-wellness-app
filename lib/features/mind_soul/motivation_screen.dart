@@ -192,7 +192,7 @@ class _MotivationScreenState extends ConsumerState<MotivationScreen> {
                   shape: BoxShape.circle,
                   gradient: LinearGradient(colors: AppColors.pinkLavender),
                 ),
-                child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 22),
+                child: const Icon(Icons.favorite_rounded, color: AppColors.white, size: 22),
               ),
               const SizedBox(height: 16),
               Text(
@@ -239,7 +239,7 @@ class _MotivationScreenState extends ConsumerState<MotivationScreen> {
           duration: const Duration(milliseconds: 160),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: selected ? AppColors.purple : Colors.white.withValues(alpha: .72),
+            color: selected ? AppColors.purple : AppColors.white.withValues(alpha: .72),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: selected ? AppColors.purple : AppColors.hairline),
           ),
@@ -248,7 +248,7 @@ class _MotivationScreenState extends ConsumerState<MotivationScreen> {
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : AppColors.darkText,
+              color: selected ? AppColors.white : AppColors.darkText,
             ),
           ),
         ),

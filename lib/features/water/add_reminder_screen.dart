@@ -153,7 +153,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: selected ? Colors.white : AppColors.darkText,
+                                  color: selected ? AppColors.white : AppColors.darkText,
                                 ),
                               ),
                             ),
@@ -192,7 +192,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: AppColors.white,
                           ),
                         )
                       : Text(_isEditing ? 'Save changes' : 'Add reminder'),
@@ -232,7 +232,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       initialTime: _time,
       helpText: 'Reminder time',
     );
-    if (picked != null) setState(() => _time = picked);
+    if (!mounted || picked == null) return;
+    setState(() => _time = picked);
   }
 
   Future<void> _save() async {

@@ -211,7 +211,7 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     color: selected
-                                        ? Colors.white
+                                        ? AppColors.white
                                         : AppColors.secondaryText,
                                   ),
                                 ),
@@ -284,7 +284,7 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2, color: AppColors.white),
                           )
                         : Text(widget.editing == null ? 'Save medicine' : 'Save changes'),
                   ),
@@ -319,7 +319,7 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
       context: context,
       initialTime: const TimeOfDay(hour: 8, minute: 0),
     );
-    if (picked == null) return;
+    if (!mounted || picked == null) return;
     final minute = picked.hour * 60 + picked.minute;
     if (_times.contains(minute)) return;
     setState(() => _times = [..._times, minute]..sort());
@@ -330,7 +330,7 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
       context: context,
       initialTime: TimeOfDay(hour: minute ~/ 60, minute: minute % 60),
     );
-    if (picked == null) return;
+    if (!mounted || picked == null) return;
     final next = picked.hour * 60 + picked.minute;
     setState(() {
       _times = _times.where((t) => t != minute).toList();
@@ -346,7 +346,8 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
       firstDate: AkashaDates.today(),
       lastDate: DateTime.now().add(const Duration(days: 730)),
     );
-    if (picked != null) setState(() => _endDate = picked);
+    if (!mounted || picked == null) return;
+    setState(() => _endDate = picked);
   }
 
   Future<void> _save() async {

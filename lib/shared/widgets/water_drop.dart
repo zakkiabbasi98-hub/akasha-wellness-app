@@ -77,14 +77,14 @@ class _DropPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = w * 0.07
         ..strokeCap = StrokeCap.round
-        ..color = Colors.white.withValues(alpha: .55),
+        ..color = AppColors.white.withValues(alpha: .55),
     );
 
     // Additive sparkle at the tip.
     canvas.drawCircle(
       Offset(w * 0.50, h * 0.18),
       w * 0.035,
-      Paint()..color = Colors.white.withValues(alpha: .85),
+      Paint()..color = AppColors.white.withValues(alpha: .85),
     );
     // ignore: unused_local_variable
     final _ = tip;

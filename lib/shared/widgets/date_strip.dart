@@ -113,7 +113,7 @@ class _DayChip extends StatelessWidget {
                 fontSize: 17,
                 height: 1,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected ? Colors.white : AppColors.darkText,
+                color: selected ? AppColors.white : AppColors.darkText,
               ),
             ),
             const SizedBox(height: 5),
@@ -123,7 +123,7 @@ class _DayChip extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: hasMarker
-                    ? (selected ? Colors.white : AppColors.primaryPink)
+                    ? (selected ? AppColors.white : AppColors.primaryPink)
                     : Colors.transparent,
               ),
             ),
@@ -154,8 +154,8 @@ class DatePill extends StatelessWidget {
             data: Theme.of(context).copyWith(
               colorScheme: Theme.of(context).colorScheme.copyWith(
                     primary: AppColors.purple,
-                    onPrimary: Colors.white,
-                    surface: Colors.white,
+                    onPrimary: AppColors.white,
+                    surface: AppColors.white,
                     onSurface: AppColors.darkText,
                   ),
             ),

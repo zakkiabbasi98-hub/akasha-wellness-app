@@ -13,14 +13,9 @@ class AppShell extends StatelessWidget {
 
   final StatefulNavigationShell navigationShell;
 
-  static const List<String> _paths = [
-    Routes.home,
-    Routes.water,
-    Routes.medicine,
-    Routes.mind,
-    Routes.profile,
-  ];
-
+  /// Branch order is fixed by the `StatefulShellRoute` in app_router.dart and
+  /// must stay identical to `AkashaBottomNav.defaultItems`; `routing_test.dart`
+  /// asserts the pair.
   void _onSelect(int index) {
     navigationShell.goBranch(
       index,

@@ -28,7 +28,7 @@ class MiniStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .78),
+        color: AppColors.white.withValues(alpha: .78),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.hairline),
       ),
@@ -384,7 +384,7 @@ class MoodCard extends StatelessWidget {
             child: Icon(
               moodIcon(mood),
               size: 21,
-              color: Colors.white,
+              color: AppColors.white,
             ),
           ),
           const SizedBox(width: 12),
@@ -480,12 +480,12 @@ class SelfCareCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.self_improvement_rounded, size: 17, color: Colors.white),
+              const Icon(Icons.self_improvement_rounded, size: 17, color: AppColors.white),
               const SizedBox(width: 7),
               Text(
                 'Today\'s self-care',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.white,
+                      color: AppColors.white,
                       fontSize: 12.5,
                       letterSpacing: .2,
                     ),
@@ -495,7 +495,7 @@ class SelfCareCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .25),
+                    color: AppColors.white.withValues(alpha: .25),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: const Text(
@@ -503,7 +503,7 @@ class SelfCareCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: AppColors.white,
                     ),
                   ),
                 ),
@@ -516,7 +516,7 @@ class SelfCareCard extends StatelessWidget {
               fontSize: 14.5,
               height: 1.45,
               fontWeight: FontWeight.w500,
-              color: Colors.white,
+              color: AppColors.white,
               letterSpacing: -0.1,
             ),
           ),
@@ -556,7 +556,7 @@ class _WhitePill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .92),
+          color: AppColors.white.withValues(alpha: .92),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
@@ -781,7 +781,7 @@ class _ShortcutTile extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, size: 20, color: Colors.white),
+            child: Icon(icon, size: 20, color: AppColors.white),
           ),
           const SizedBox(height: 6),
           Text(

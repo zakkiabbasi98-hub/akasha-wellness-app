@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../content/motivation_content.dart';
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../data/models/user_settings.dart';
 import '../../shared/widgets/app_nav.dart';
 import '../../shared/widgets/gradient_scaffold.dart';

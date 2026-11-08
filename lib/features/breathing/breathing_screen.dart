@@ -265,7 +265,7 @@ class _BreathingScreenState extends ConsumerState<BreathingScreen>
                                   height: 118 + 30 * t,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Colors.white.withValues(alpha: .92),
+                                    color: AppColors.white.withValues(alpha: .92),
                                   ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -341,18 +341,23 @@ class _BreathingScreenState extends ConsumerState<BreathingScreen>
                       child: OutlinedButton(
                         onPressed: () async {
                           _pause();
-                          if (_elapsedSeconds > 30) {
+                          // Capture the values before the await: the user can
+                          // leave the screen while the write is in flight.
+                          final seconds = _elapsedSeconds;
+                          final startedAt = _startedAt;
+                          if (seconds > 30 && startedAt != null) {
                             final profile =
                                 await ref.read(profileProvider.future);
                             await ref.read(mindRepositoryProvider).saveBreathing(
                                   userId: profile.id,
-                                  durationSeconds: _elapsedSeconds,
+                                  durationSeconds: seconds,
                                   completed: false,
-                                  startedAt: _startedAt,
+                                  startedAt: startedAt,
                                 );
                             ref.invalidate(todayBreathingProvider);
                             ref.invalidate(dataRevisionProvider);
                           }
+                          if (!mounted) return;
                           setState(() {
                             _elapsedSeconds = 0;
                             _cycles = 0;

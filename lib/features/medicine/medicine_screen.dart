@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/models/medicine_models.dart';
 import '../../shared/widgets/app_nav.dart';
@@ -31,7 +30,7 @@ class MedicineScreen extends ConsumerWidget {
         child: FloatingActionButton.extended(
           onPressed: () => context.push(Routes.medicineAdd),
           backgroundColor: AppColors.purple,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.white,
           elevation: 3,
           icon: const Icon(Icons.add_rounded, size: 20),
           label: const Text(
@@ -323,7 +322,7 @@ class _DoseCard extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: Color.alphaBlend(
                     _statusColor.withValues(alpha: .13),
-                    Colors.white,
+                    AppColors.white,
                   ),
                   borderRadius: BorderRadius.circular(13),
                 ),
@@ -525,12 +524,32 @@ class _MedicineTile extends ConsumerWidget {
           value: medicine.enabled,
           activeTrackColor: AppColors.primaryPink,
           onChanged: (value) async {
-            await ref.read(medicineRepositoryProvider).setEnabled(medicine.id, value);
-            final exact =
-                await ref.read(notificationServiceProvider).canScheduleExactAlarms();
-            await ref.read(reminderSchedulerProvider).rescheduleAll(exact: exact);
-            ref.invalidate(medicinesProvider);
-            ref.invalidate(todayDosesProvider);
+            try {
+              await ref
+                  .read(medicineRepositoryProvider)
+                  .setEnabled(medicine.id, value);
+              final exact = await ref
+                  .read(notificationServiceProvider)
+                  .canScheduleExactAlarms();
+              await ref
+                  .read(reminderSchedulerProvider)
+                  .rescheduleAll(exact: exact);
+              ref.invalidate(medicinesProvider);
+              ref.invalidate(todayDosesProvider);
+              ref.invalidate(schedulingStatusProvider);
+            } catch (_) {
+              // A failed toggle leaves the switch to re-render from the
+              // database on the next read, so the UI cannot claim a state that
+              // was never saved.
+              if (context.mounted) {
+                showAkashaToast(
+                  context,
+                  'Could not update this medicine. Nothing was changed.',
+                  icon: Icons.error_outline_rounded,
+                  color: AppColors.warning,
+                );
+              }
+            }
           },
         ),
         onTap: () => context.push(Routes.medicineAdd, extra: MedicineArg(medicine)),

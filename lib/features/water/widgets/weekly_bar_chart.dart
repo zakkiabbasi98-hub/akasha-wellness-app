@@ -63,7 +63,7 @@ class WeeklyWaterChart extends StatelessWidget {
                 return BarTooltipItem(
                   '${DateFormat('d MMM').format(point.date)}\n${point.totalMl} ml',
                   const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     height: 1.4,

@@ -262,9 +262,10 @@ flutter test integration_test   # on a connected device/emulator
 | `test/unit/sync_logic_test.dart` | conflict-resolution truth table, local-only backend, AI crisis detection |
 | `test/widget/design_system_test.dart` | theme fundamentals, gradient scaffold, cards, rings, droplet meter, empty/loading states, bottom nav + semantics |
 | `test/widget/dashboard_widgets_test.dart` | water hero card maths and copy, medicine card states, mood card, shortcuts, self-care/motivation cards |
+| `test/unit/routing_test.dart` | every route constant exists in the tree — the check that caught seven dead Settings tiles |
 | `integration_test/app_test.dart` | install → onboarding → log water → persist across restart |
 
-134 test cases in total (93 unit, 36 widget, 5 integration).
+140 test cases in total (99 unit, 36 widget, 5 integration).
 
 `docs/TESTING.md` lists the **device matrix** (locked screen, background,
 terminated, reboot, airplane mode, DND, denied permissions, Android 8–14) and how

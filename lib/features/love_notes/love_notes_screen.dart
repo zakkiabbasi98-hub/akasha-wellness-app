@@ -34,7 +34,7 @@ class _LoveNotesScreenState extends ConsumerState<LoveNotesScreen> {
         child: FloatingActionButton.extended(
           onPressed: () => _openEditor(),
           backgroundColor: AppColors.rose,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.white,
           icon: const Icon(Icons.edit_rounded, size: 17),
           label: const Text(
             'Write a note',
@@ -274,6 +274,11 @@ class _LoveNotesScreenState extends ConsumerState<LoveNotesScreen> {
       ),
     );
 
+    // The sheet is closed at this point; its controllers are local and must be
+    // disposed by hand (nothing in the widget tree owns them).
+    textController.dispose();
+    authorController.dispose();
+
     if (saved == true && mounted) {
       showAkashaToast(
         context,
@@ -315,7 +320,7 @@ class _NoteCard extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: note.enabled
               ? AppColors.noteCream
-              : [Colors.white, Colors.white],
+              : [AppColors.white, AppColors.white],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(

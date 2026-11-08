@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_tokens.dart';
 import '../../core/utils/date_utils.dart';
 import '../../data/models/medicine_models.dart';
 import '../../shared/widgets/app_nav.dart';
@@ -238,7 +237,7 @@ class _MedicineHistoryScreenState extends ConsumerState<MedicineHistoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AppColors.purple : Colors.white.withValues(alpha: .7),
+          color: selected ? AppColors.purple : AppColors.white.withValues(alpha: .7),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: selected ? AppColors.purple : AppColors.hairline),
         ),
@@ -247,7 +246,7 @@ class _MedicineHistoryScreenState extends ConsumerState<MedicineHistoryScreen> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : AppColors.darkText,
+            color: selected ? AppColors.white : AppColors.darkText,
           ),
         ),
       ),
@@ -264,7 +263,7 @@ class _MedicineHistoryScreenState extends ConsumerState<MedicineHistoryScreen> {
         decoration: BoxDecoration(
           color: selected
               ? tint.withValues(alpha: .16)
-              : Colors.white.withValues(alpha: .6),
+              : AppColors.white.withValues(alpha: .6),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected ? tint.withValues(alpha: .5) : AppColors.hairline,

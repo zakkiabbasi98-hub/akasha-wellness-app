@@ -233,19 +233,22 @@ class ReportsRepository {
     required int targetMl,
   }) async {
     final waterTotals = await water.totalsByDay(userId, from, to);
-    final journalDays = await mind.journalCountInRange(userId, from, to);
     final map = <DateTime, int>{};
+
+    // Intensity: 3 = goal reached, 2 = some water, 1 = another kind of record.
     waterTotals.forEach((key, value) {
       map[AkashaDates.parseKey(key)] = value >= targetMl ? 3 : (value > 0 ? 2 : 1);
     });
-    if (journalDays > 0) {
-      // journal presence is aggregated; individual days come from the list
-      final entries = await mind.journalEntries(userId, from: from, to: to, limit: 500);
-      for (final e in entries) {
-        final day = AkashaDates.parseKey(e.dayKey);
-        final current = map[day] ?? 0;
-        map[day] = current.clamp(1, 3);
-      }
+
+    // A day with a journal entry but no water is still a day she showed up, so
+    // it must get intensity 1 (previously it was left at 0, which the calendar
+    // could not distinguish from an empty day).
+    final entries =
+        await mind.journalEntries(userId, from: from, to: to, limit: 500);
+    for (final e in entries) {
+      final day = AkashaDates.parseKey(e.dayKey);
+      final current = map[day];
+      if (current == null || current < 1) map[day] = 1;
     }
     return map;
   }
