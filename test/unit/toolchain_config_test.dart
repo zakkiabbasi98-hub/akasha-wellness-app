@@ -144,21 +144,89 @@ void main() {
     });
   });
 
-  group('Dart dependency pins', () {
+  group('Dart dependency constraints', () {
+    /// Every `name: constraint` pair in the two dependency sections.
+    Map<String, String> constraints() {
+      final out = <String, String>{};
+      var section = '';
+      for (final raw in read('pubspec.yaml').split('\n')) {
+        if (raw.trim().isEmpty || raw.trimLeft().startsWith('#')) continue;
+        if (!raw.startsWith(' ')) {
+          section = raw.split(':').first.trim();
+          continue;
+        }
+        if (section != 'dependencies' && section != 'dev_dependencies') {
+          continue;
+        }
+        final m = RegExp(r'^  ([a-z_0-9]+):\s*(.+?)\s*$').firstMatch(raw);
+        if (m == null) continue;
+        // Drop a trailing comment before inspecting the value.
+        final value = m.group(2)!.split(RegExp(r'\s+#')).first.trim();
+        out[m.group(1)!] = value;
+      }
+      return out;
+    }
+
+    test('the dependency sections are actually found', () {
+      final all = constraints();
+      expect(all, isNotEmpty);
+      expect(all.keys, containsAll(<String>[
+        'flutter_local_notifications',
+        'timezone',
+        'share_plus',
+        'sqflite',
+        'sqflite_common_ffi',
+      ]));
+    });
+
+    test('every constraint uses valid pub syntax', () {
+      // Pub accepts `^x.y.z`, ranges (`>=x <y`) and bare versions. Everything
+      // here must be one of those; anything else is the invalid-syntax class of
+      // bug this pass exists to remove.
+      final caret = RegExp(r'^\^\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]+)?$');
+      final exact = RegExp(r'^\d+\.\d+\.\d+([-+][0-9A-Za-z.+-]+)?$');
+      final range = RegExp(r'^[<>]=?\d+\.\d+\.\d+\s+[<>]=?\d+\.\d+\.\d+$');
+      final sdkEntry = RegExp(r'^sdk:');
+      final offenders = <String>[];
+      constraints().forEach((name, value) {
+        if (sdkEntry.hasMatch(value)) return; // `sdk: flutter`
+        final v = value.replaceAll('"', '').replaceAll("'", '');
+        if (caret.hasMatch(v) || exact.hasMatch(v) || range.hasMatch(v)) return;
+        offenders.add('$name: $value');
+      });
+      expect(offenders, isEmpty,
+          reason: 'Unrecognised version syntax: ${offenders.join(', ')}');
+    });
+
+    test('no tilde constraint exists anywhere in pubspec.yaml', () {
+      // Explicit project rule: `~` is never used for a version constraint.
+      for (final line in read('pubspec.yaml').split('\n')) {
+        if (RegExp(r'^\s+[a-z_0-9]+:\s+~').hasMatch(line)) {
+          fail('Tilde constraint found: ${line.trim()}');
+        }
+      }
+    });
+
     test('flutter_local_notifications stays on the 17.x API surface', () {
-      final pubspec = read('pubspec.yaml');
-      expect(pubspec, contains('flutter_local_notifications: ~17.2.4'));
-      // 18+ removes uiLocalNotificationDateInterpretation entirely.
-      expect(pubspec, isNot(contains('flutter_local_notifications: ^19')));
+      // `^17.2.4` means >=17.2.4 <18.0.0 — it cannot reach 18/19, where
+      // uiLocalNotificationDateInterpretation and the positional
+      // zonedSchedule the code is written against disappear.
+      expect(constraints()['flutter_local_notifications'], '^17.2.4');
     });
 
-    test('timezone matches what 17.2.4 requires', () {
-      expect(read('pubspec.yaml'), contains('timezone: ~0.9.4'));
+    test('timezone is the range 17.2.4 requires', () {
+      // A 0.x caret stops at the next minor, so ^0.9.4 is >=0.9.4 <0.10.0.
+      expect(constraints()['timezone'], '^0.9.4');
     });
 
-    test('share_plus is pinned where the Kotlin plugin still builds', () {
-      final pubspec = read('pubspec.yaml');
-      expect(pubspec, contains('share_plus: ~12.0.2'));
+    test('share_plus stays inside the 12.x line', () {
+      // 10/11 pin Kotlin 1.7.22 + AGP 8.3.1; 13 drops the JVM-target guard.
+      expect(constraints()['share_plus'], '^12.0.2');
+    });
+
+    test('there is no dependency_overrides section', () {
+      // Overrides silently defeat the constraints above.
+      expect(read('pubspec.yaml'), isNot(contains('dependency_overrides')));
     });
   });
 }

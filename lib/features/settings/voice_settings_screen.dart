@@ -298,8 +298,8 @@ class _VoiceSettingsScreenState extends ConsumerState<VoiceSettingsScreen> {
   Future<void> _preview() async {
     setState(() => _previewing = true);
     try {
-      final settings = ref.read(settingsControllerProvider).valueOrNull ??
-          await ref.read(settingsProvider.future);
+      final settings =
+          await ref.read(settingsControllerProvider.notifier).currentSettings();
       final service = ref.read(voicePlanServiceProvider);
 
       if (!await service.isAvailable()) {

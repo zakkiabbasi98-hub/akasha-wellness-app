@@ -287,8 +287,9 @@ class DiagnosticsScreen extends ConsumerWidget {
                           iconColor: AppColors.rose,
                           onTap: () async {
                             final settings =
-                                ref.read(settingsControllerProvider).valueOrNull ??
-                                    await ref.read(settingsProvider.future);
+                                await ref
+                                    .read(settingsControllerProvider.notifier)
+                                    .currentSettings();
                             final service = ref.read(voicePlanServiceProvider);
                             if (!await service.isAvailable()) {
                               if (context.mounted) {

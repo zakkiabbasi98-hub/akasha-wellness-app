@@ -25,6 +25,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _month = AkashaDates.startOfMonth(DateTime.now());
   DateTime _selected = AkashaDates.today();
 
+  /// Monday-first weekday header style. Hoisted out of the widget tree so the
+  /// header can be generated with a collection-`for` (which `const` forbids)
+  /// while the text style itself stays a compile-time constant.
+  static const TextStyle _weekdayStyle = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    color: AppColors.secondaryText,
+  );
+
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
@@ -95,18 +104,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Row(
-                                  children: const [
-                                    for (final day in ['M', 'T', 'W', 'T', 'F', 'S', 'S'])
+                                  children: [
+                                    // A collection-`for` cannot live inside a
+                                    // `const` literal, so the list is built at
+                                    // runtime and only the shared style is const.
+                                    for (final day in const [
+                                      'M',
+                                      'T',
+                                      'W',
+                                      'T',
+                                      'F',
+                                      'S',
+                                      'S',
+                                    ])
                                       Expanded(
                                         child: Center(
-                                          child: Text(
-                                            day,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.secondaryText,
-                                            ),
-                                          ),
+                                          child: Text(day, style: _weekdayStyle),
                                         ),
                                       ),
                                   ],

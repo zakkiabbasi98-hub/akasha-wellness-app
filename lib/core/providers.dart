@@ -156,9 +156,31 @@ class SettingsController extends StateNotifier<AsyncValue<UserSettings>> {
     state = AsyncValue.data(await ref.read(settingsProvider.future));
   }
 
+  /// The current settings, guaranteed non-null.
+  ///
+  /// The three screens that speak a preview (voice settings, diagnostics) and
+  /// [update] all need a `UserSettings`, never a `UserSettings?`. Rather than
+  /// forcing every call site to write `valueOrNull ?? await …` — and rather
+  /// than papering over the gap with `!` — the three states are handled here,
+  /// once:
+  ///
+  /// * **data**  → return it (pattern match, so there is no null assertion),
+  /// * **loading** → await the source provider, which is what the UI is waiting
+  ///   on anyway,
+  /// * **error** → awaiting the provider surfaces that same error to the
+  ///   caller instead of silently substituting a second, possibly stale fetch.
+  ///
+  /// The screens still render their own loading/error states from the watched
+  /// `AsyncValue`; this only serves imperative callbacks (button handlers).
+  Future<UserSettings> currentSettings() async {
+    final snapshot = state;
+    if (snapshot.value case final UserSettings loaded) return loaded;
+    return ref.read(settingsProvider.future);
+  }
+
   Future<void> update(UserSettings Function(UserSettings) change) async {
     final repo = ref.read(profileRepositoryProvider);
-    final current = state.valueOrNull ?? await ref.read(settingsProvider.future);
+    final current = await currentSettings();
     final saved = await repo.saveSettings(change(current));
     state = AsyncValue.data(saved);
     ref.invalidate(settingsProvider);
