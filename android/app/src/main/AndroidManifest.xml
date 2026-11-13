@@ -1,0 +1,139 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ─── Core reminders ─────────────────────────────────────────────── -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ─── Exact alarms (repair R6) ────────────────────────────────────────
+         SCHEDULE_EXACT_ALARM is the correct permission for this app.
+
+         USE_EXACT_ALARM was REMOVED. It is granted automatically at install,
+         cannot be revoked, and Google Play restricts it to alarm-clock and
+         calendar apps. This is a wellness reminder app, so it does not qualify,
+         and shipping it risks rejection for a permission we do not need.
+
+         SCHEDULE_EXACT_ALARM is user-controlled: on Android 12 the user turns
+         it on in Settings; from Android 13 it is granted by default and can be
+         revoked at any time. The app treats it as an optimisation, never a
+         requirement: the scheduler checks canScheduleExactAlarms(), falls back
+         to inexactAllowWhileIdle (still within ~10 minutes), and Diagnostics
+         explains the difference in plain language. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!-- Heads-up reminder style. Android 14+ gates this behind a user grant;
+         the app checks canUseFullScreenIntent() and degrades to a normal
+         heads-up notification when it is denied. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Optional: prompt user to exempt the app from battery optimisation.
+         Never applied silently — always explained in the diagnostics screen. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Biometric app lock -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- Optional cloud sync + AI companion -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:label="Akasha"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ═══ flutter_local_notifications wiring ═══════════════════════ -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+
+        <!-- Restores every pending reminder after reboot / app update.
+             exported="false" is what the plugin's own README specifies: the
+             system can still deliver protected broadcast actions to a
+             non-exported receiver, and keeping it false means no third-party
+             app can poke it. (See docs/NOTIFICATIONS.md — there is an open
+             upstream issue claiming Android 12+ needs this true; that claim
+             contradicts the documented setup and must be settled on a real
+             device, so the documented value is kept.) -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Notification ACTION BUTTONS (I drank / Skip / Later), delivered by
+             the plugin's own AlarmManager PendingIntent while the app is dead.
+             A PendingIntent created by this app can target a non-exported
+             receiver, so exported="false" is both sufficient and safer. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
+
+        <!-- Spoken reminders (repair R3). Started by an AlarmManager PendingIntent
+             created inside this app, speaks one line with its own TextToSpeech
+             engine, then re-arms tomorrow. Not exported: nothing outside the
+             app can make it speak. -->
+        <receiver
+            android:exported="false"
+            android:name=".VoiceReminderReceiver">
+            <intent-filter>
+                <action android:name="com.akasha.wellness.SPEAK_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ═══ Timezone + clock changes: reschedule local alarms ═════════ -->
+        <!-- Clock, timezone, reboot and app-update broadcasts. These are
+             protected system actions: the system can deliver them to a
+             non-exported receiver, so it stays private. -->
+        <receiver
+            android:exported="false"
+            android:name=".TimeChangeReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Firebase is optional: no credentials committed. See docs/FIREBASE_SETUP.md -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+
+    <!-- Package visibility (Android 11+) — required by isSpeechAvailable() -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+</manifest>

@@ -1,0 +1,38 @@
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }()
+
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    // Version pairing (all four must move together, and they must match the
+    // toolchain the app is actually built with):
+    //   AGP 8.11.1 ←→ Gradle 8.14 ←→ JDK 21 ←→ Kotlin 2.2.20
+    // * AGP 8.11.x requires Gradle 8.13+ and JDK 17+ (JDK 21 is the supported
+    //   Java version for AGP 8.11) and supports compileSdk 36.
+    // * AGP 9 is deliberately NOT used: it would force Flutter 3.47+/Built-in
+    //   Kotlin and several plugins in this graph still apply KGP themselves.
+    // Gradle is pinned in gradle/wrapper/gradle-wrapper.properties.
+    id "com.android.application" version "8.11.1" apply false
+    // Kotlin 2.2.20 is the version AGP 8.11's built-in Kotlin support expects,
+    // and it is what every plugin in this graph compiles against.
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
+    // Firebase (optional). Uncomment together with the apply line in app/build.gradle
+    // after adding google-services.json — see docs/FIREBASE_SETUP.md
+    // id "com.google.gms.google-services" version "4.4.2" apply false
+}
+
+include ":app"

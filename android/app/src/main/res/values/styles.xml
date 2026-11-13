@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch stays on-brand: soft blush → lavender, no white flash. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/akasha_window_bg</item>
+    </style>
+
+    <color name="akasha_window_bg">#FFFBF9FD</color>
+    <color name="akasha_pink">#FFF2A9CE</color>
+    <color name="akasha_lavender">#FFCBB5F5</color>
+    <color name="akasha_icon_bg">#FFF7EDF9</color>
+</resources>

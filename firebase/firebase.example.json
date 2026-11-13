@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "PLACEHOLDER ONLY — example of firebase.json after adding real values.",
+    "The repository ships a working firebase.json with no project-specific data.",
+    "Copy to firebase.json only if you need a custom project/region; never add",
+    "service-account keys or API keys to this file."
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "ui": { "enabled": true, "port": 4000 }
+  }
+}

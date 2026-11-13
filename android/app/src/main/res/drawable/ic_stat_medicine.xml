@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small notification icon: a capsule. Flat white, transparent background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4.4,12.6L11.3,5.7A4.6,4.6 0 0,1 17.8,12.2L10.9,19.1A4.6,4.6 0 0,1 4.4,12.6ZM6.6,14.8L10.9,19.1A2.6,2.6 0 0,0 14.6,15.4L10.3,11.1L6.6,14.8Z" />
+</vector>

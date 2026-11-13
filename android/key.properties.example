@@ -1,0 +1,11 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Release signing — example. Copy to android/key.properties (git-ignored).
+# Never commit the real file or the .jks keystore.
+#
+#   keytool -genkey -v -keystore ~/akasha-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias akasha
+# ─────────────────────────────────────────────────────────────────────────────
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=akasha
+storeFile=/absolute/path/to/akasha-release.jks

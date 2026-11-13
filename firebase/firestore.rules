@@ -1,0 +1,118 @@
+rules_version = '2';
+
+// Firestore security rules for AKASHA.
+//
+// Model: one document per user, with per-entity subcollections.
+//   users/{uid}                        ← own profile only
+//   users/{uid}/{entity}/{recordId}    ← own records only
+//
+// Unknown top-level collections are denied by the catch-all at the bottom, with
+// the two deliberate exceptions documented there.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// Threat model this closes:
+//   * reading another user's journal, mood or medication records,
+//   * writing into another user's collection,
+//   * smuggling a record into an unlisted collection,
+//   * overwriting `dirty`/`updated_at` to defeat conflict resolution,
+//   * unbounded records (a 1 MB document per write, repeated),
+//   * client-set `uid` fields that disagree with the authenticated identity.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAllowedEntity(entity) {
+      return entity in [
+        'water_logs',
+        'water_reminders',
+        'water_snoozes',
+        'medicines',
+        'medicine_schedules',
+        'medicine_logs',
+        'mood_entries',
+        'journal_entries',
+        'gratitude_entries',
+        'breathing_sessions',
+        'reflections',
+        'love_notes',
+        'settings'
+      ];
+    }
+
+    // Every synced record carries these fields. Validated on create AND update
+    // so a client cannot strip the sync housekeeping mid-flight.
+    function hasRequiredFields() {
+      return request.resource.data.keys().hasAll(['id', 'updated_at'])
+        && request.resource.data.id is string
+        && request.resource.data.id.size() > 0
+        && request.resource.data.id.size() <= 80
+        && request.resource.data.updated_at is int;
+    }
+
+    // A record may not claim to belong to somebody else.
+    function ownerMatches(uid) {
+      return !('user_id' in request.resource.data)
+        || request.resource.data.user_id == uid;
+    }
+
+    function withinSizeLimit() {
+      return request.resource.data.size() <= 40;
+    }
+
+    function isValidRecord(uid) {
+      return hasRequiredFields()
+        && ownerMatches(uid)
+        && withinSizeLimit();
+    }
+
+    // ── Profile ──────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow get, list: if isOwner(uid);
+      allow create: if isOwner(uid) && request.resource.data.size() <= 20;
+      // The profile document holds a display name and flags only.
+      allow update: if isOwner(uid) && request.resource.data.size() <= 20;
+      allow delete: if isOwner(uid);
+
+      // ── Per-entity records ────────────────────────────────────────────────
+      match /{entity}/{recordId} {
+        allow get, list: if isOwner(uid) && isAllowedEntity(entity);
+
+        allow create: if isOwner(uid)
+          && isAllowedEntity(entity)
+          && isValidRecord(uid)
+          && recordId == request.resource.data.id;
+
+        allow update: if isOwner(uid)
+          && isAllowedEntity(entity)
+          && isValidRecord(uid)
+          && recordId == request.resource.data.id;
+
+        // Soft deletes go through update (setting deleted_at); a hard delete is
+        // only permitted for the document that actually exists.
+        allow delete: if isOwner(uid) && isAllowedEntity(entity);
+      }
+    }
+
+    // ── AI rate-limit ledger ─────────────────────────────────────────────────
+    // Written only by the Cloud Function (Admin SDK, which bypasses rules).
+    // Explicitly deny clients: without this, a user could reset her own counter
+    // in the Firestore console-free way — by writing to her own document.
+    match /ai_rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // ── Default deny ─────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

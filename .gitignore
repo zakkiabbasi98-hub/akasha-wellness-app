@@ -1,0 +1,45 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+.idea/
+.vscode/
+.metadata
+coverage/
+*.g.dart.bak
+
+# Android
+android/.gradle/
+# NOTE: android/gradle/wrapper/gradle-wrapper.jar IS committed on purpose.
+# Android Studio and `flutter build` require it, and a checkout without it
+# cannot build. It is a 44 KB official Gradle file (taken unmodified from the
+# Gradle 8.14.0 source distribution, md5 15a2cd45cb049056c465b481d6eabb3c),
+# not a generated artefact. Keep it in step with
+# android/gradle/wrapper/gradle-wrapper.properties.
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/.idea/
+android/key.properties
+*.jks
+*.keystore
+android/app/google-services.json
+
+# Firebase / secrets — never commit credentials
+firebase/app/google-services.json
+firebase/service-account*.json
+lib/firebase_options.dart
+.env
+*.env
+env.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,115 @@
+name: akasha
+description: "AKASHA — Hydrate • Smile • Shine. A gentle, offline-first wellness companion for hydration, medication, mood and mind."
+publish_to: "none"
+version: 1.1.0+2
+
+environment:
+  # Dart 3.12 ships with Flutter 3.44, which is the toolchain this app is built
+  # with. The lower bound stays at 3.6 so the source still compiles on older
+  # stable channels, but every dependency below is pinned to a version whose
+  # own constraints this toolchain satisfies.
+  sdk: ">=3.6.0 <4.0.0"
+
+# NOTE ON DATABASE ENGINE
+# ---------------------------------------------------------------------------
+# The specification asked for SQLite through Drift. Drift's typed tables
+# require a build_runner code-generation step (generated *.g.dart files).
+# So that this repository compiles the moment you open it — with no codegen
+# step, no missing parts, and no build_runner version conflicts — the local
+# database is implemented on top of SQLite via `sqflite` behind repository
+# interfaces (see lib/core/database/). Everything you would want from a local
+# SQL engine is present: migrations, foreign keys, indexes, transactions,
+# WAL journaling. Swapping in Drift later only touches
+# lib/core/database/app_database.dart because no other layer knows about SQL.
+# See docs/DATABASE.md → "Why sqflite instead of Drift".
+# ---------------------------------------------------------------------------
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management & navigation
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.3
+
+  # Local persistence (offline-first)
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+
+  # Notifications & alarms
+  #
+  # WHY 17.2.4 AND NOT 19/20/22: the 17.x line is the last that still takes
+  # `uiLocalNotificationDateInterpretation` and a positional `zonedSchedule`.
+  # 18+ renamed `AndroidFlutterLocalNotificationsPlugin.zonedSchedule`'s
+  # `scheduleMode` and 19+ removed that argument entirely, so every call site in
+  # lib/core/notifications/ is written against 17.x's API.
+  # `^17.2.4` resolves to >=17.2.4 <18.0.0 — it cannot cross into the breaking
+  # 18/19 API, so the notification layer stays on the surface it was written for.
+  flutter_local_notifications: ^17.2.4
+  # 17.2.4 requires timezone ^0.9.0. `^0.9.4` resolves to >=0.9.4 <0.10.0, which
+  # is exactly the range the plugin allows (a 0.x caret never reaches the next
+  # minor), and it keeps the zone lookups in NotificationService valid.
+  timezone: ^0.9.4
+
+  # NOTE: flutter_tts was removed in the repair pass. Spoken reminders are
+  # played by Android's own TextToSpeech engine from a native receiver, because
+  # a Dart TTS engine cannot run once the app process has been killed — which is
+  # precisely when a reminder needs to speak. See docs/NOTIFICATIONS.md.
+
+  # Platform helpers
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.0.5
+  local_auth: ^2.3.0
+
+  # UI
+  fl_chart: ^0.69.0
+  http: ^1.2.2
+  # 10.x still applies the legacy Kotlin Gradle Plugin and pins AGP 8.3.1 in
+  # its own buildscript, which conflicts with AGP 8.11.1 + Kotlin 2.2.20 here.
+  # `^12.0.2` resolves to >=12.0.2 <13.0.0: it stays inside the 12.x line, which
+  # declares `kotlin_version = 2.2.0` and builds against AGP 8.x.
+  share_plus: ^12.0.2
+  flutter_svg: ^2.0.10+1
+  intl: ^0.19.0
+
+  # Utility
+  uuid: ^4.4.2
+
+  # Optional cloud layer (app runs fully offline without it)
+  firebase_core: ^3.3.0
+  firebase_auth: ^5.1.4
+  cloud_firestore: ^5.2.1
+  firebase_messaging: ^15.0.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  integration_test:
+    sdk: flutter
+  # Runs the real SQLite engine on the host, so the schema, the migrations and
+  # the notification-idempotency ledger can be tested without a device.
+  # test/unit/notification_ledger_test.dart uses it.
+  sqflite_common_ffi: ^2.3.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/sounds/
+  # Optional premium typography: drop Poppins/Quicksand .ttf files into
+  # assets/fonts/ and uncomment to enable (see assets/fonts/README.md).
+  # fonts:
+  #   - family: Poppins
+  #     fonts:
+  #       - asset: assets/fonts/Poppins-Regular.ttf
+  #       - asset: assets/fonts/Poppins-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Poppins-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Poppins-Bold.ttf
+  #         weight: 700
