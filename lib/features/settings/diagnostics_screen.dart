@@ -129,9 +129,34 @@ class DiagnosticsScreen extends ConsumerWidget {
                           ok: status.fullScreenAllowed,
                           detail: status.fullScreenAllowed
                               ? 'Android allows an alarm-style reminder over the lock screen.'
-                              : 'Not permitted, so reminders show as heads-up notifications. '
-                                  'This is a normal, policy-compliant fallback.',
-                          actionLabel: null,
+                              : status.sdkInt >= 34
+                                  ? 'Android 14 and later treat this as a permission you '
+                                      'grant per app. Not granted, so reminders arrive as '
+                                      'heads-up notifications instead — a normal, '
+                                      'policy-compliant fallback.'
+                                  : 'Not permitted, so reminders show as heads-up '
+                                      'notifications. This is a normal, policy-compliant '
+                                      'fallback.',
+                          // Only Android 14+ has a settings page for this; older
+                          // releases grant it at install time and cannot revoke it.
+                          actionLabel: status.fullScreenAllowed || status.sdkInt < 34
+                              ? null
+                              : 'Grant',
+                          onAction: () async {
+                            // The plugin's own request opens Android's official
+                            // per-app page on 14+. If an OEM build hides it, fall
+                            // back to the system settings intent.
+                            final opened = await ref
+                                .read(notificationServiceProvider)
+                                .requestFullScreenIntentsPermission();
+                            if (!opened) {
+                              await ref
+                                  .read(systemChannelProvider)
+                                  .openFullScreenIntentSettings();
+                            }
+                            await Future.delayed(const Duration(seconds: 2));
+                            ref.invalidate(schedulingStatusProvider);
+                          },
                         ),
                         _Check(
                           title: 'Battery optimisation',

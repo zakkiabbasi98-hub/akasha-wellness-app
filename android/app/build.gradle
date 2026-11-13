@@ -17,23 +17,30 @@ def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "
 
 android {
     namespace = "com.akasha.wellness"
-    compileSdk = 34
+    // Android 16 (API 36). Required by the current Play Store target rules and
+    // by AndroidX releases that every plugin in this graph now pulls in.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // JDK 21 is the toolchain this app builds with. Bytecode target stays at
+        // 17: AGP 8.11, D8/R8 and core library desugaring are all fully
+        // supported there, and 17 keeps every plugin's own bytecode compatible.
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled = true // required by flutter_local_notifications
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // NOTE: `kotlinOptions {}` was removed — Kotlin 2.2 raises that DSL to an
+    // *error*. The replacement is the `compilerOptions {}` block, declared
+    // below the `android {}` block (it belongs to the Kotlin extension, not to
+    // Android's). jvmTarget stays 17 to match `compileOptions` above; a
+    // mismatch is the "Inconsistent JVM-target compatibility" build failure.
 
     defaultConfig {
         applicationId = "com.akasha.wellness"
         minSdk = 23          // local_auth + notification permission fallbacks
-        targetSdk = 34       // Android 14
+        targetSdk = 36       // Android 16
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
         multiDexEnabled = true
@@ -72,10 +79,19 @@ android {
     }
 }
 
+// Kotlin 2.2 DSL (replaces the removed `android { kotlinOptions { } }` block).
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
 flutter {
     source = "../.."
 }
 
 dependencies {
-    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
+    // 2.1.x is required by the AndroidX libraries that compileSdk 36 pulls in;
+    // 2.0.4 fails with "dependency requires desugaring library version 2.1.4".
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
 }

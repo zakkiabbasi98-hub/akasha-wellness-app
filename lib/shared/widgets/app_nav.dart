@@ -79,11 +79,11 @@ class AkashaBottomNav extends StatelessWidget {
               : AppColors.white.withValues(alpha: .96),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isDark ? const AppColors.darkHairline : AppColors.hairline,
+            color: isDark ? AppColors.darkHairline : AppColors.hairline,
           ),
           boxShadow: [
             BoxShadow(
-              color: const AppColors.deepPurple.withValues(alpha: isDark ? .3 : .13),
+              color: AppColors.deepPurple.withValues(alpha: isDark ? .3 : .13),
               blurRadius: 26,
               offset: const Offset(0, 8),
             ),
@@ -256,7 +256,7 @@ class _RoundIconButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: isDark ? const AppColors.darkHairline : AppColors.hairline,
+              color: isDark ? AppColors.darkHairline : AppColors.hairline,
             ),
           ),
           child: Icon(icon, size: 19, color: AppColors.darkText),

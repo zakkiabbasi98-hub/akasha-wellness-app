@@ -44,6 +44,11 @@ class MainActivity : FlutterActivity() {
                         }
                         "isNotificationPolicyAccessGranted" -> result.success(isDndAccessGranted())
                         "isDndActive" -> result.success(isDndActive())
+                        "canUseFullScreenIntent" -> result.success(canUseFullScreenIntent())
+                        "openFullScreenIntentSettings" -> {
+                            openFullScreenIntentSettings()
+                            result.success(null)
+                        }
                         "openNotificationSettings" -> {
                             openNotificationSettings()
                             result.success(null)
@@ -142,6 +147,43 @@ class MainActivity : FlutterActivity() {
     private fun isDndActive(): Boolean {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
+    }
+
+    /**
+     * Whether the app may post a full-screen, alarm-style notification.
+     *
+     * Android 14 (API 34) turned this into a user-grantable permission;
+     * `NotificationManager.canUseFullScreenIntent()` only exists from that
+     * release on, so older devices fall through to the install-time grant that
+     * the manifest's USE_FULL_SCREEN_INTENT permission provides.
+     */
+    private fun canUseFullScreenIntent(): Boolean {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= 34) {
+            return nm.canUseFullScreenIntent()
+        }
+        return true
+    }
+
+    /**
+     * Deep-links to the per-app notification settings, which is where Android
+     * 14+ hosts the "Full-screen notifications" toggle.
+     */
+    private fun openFullScreenIntentSettings() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val direct = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                data = Uri.fromParts("package", packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(direct)
+                return
+            } catch (e: Exception) {
+                // Some OEM builds hide the dedicated page; the per-app
+                // notification settings link to it instead.
+            }
+        }
+        openNotificationSettings()
     }
 
     private fun openNotificationSettings() {

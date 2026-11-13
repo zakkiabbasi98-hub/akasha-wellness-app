@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart'
+    show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -58,7 +60,7 @@ abstract final class AppTheme {
 
     return base.copyWith(
       textTheme: _textTheme(base.textTheme),
-      appBarTheme: const AppBarTheme(
+      appBarTheme: const AppBarThemeData(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -126,7 +128,7 @@ abstract final class AppTheme {
           textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
         ),
       ),
-      inputDecorationTheme: InputDecorationTheme(
+      inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: AppColors.cardMuted,
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
@@ -138,19 +140,19 @@ abstract final class AppTheme {
         labelStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 14),
         floatingLabelStyle: const TextStyle(color: AppColors.purple, fontSize: 13),
         border: OutlineInputBorder(
-          borderRadius: AppRadius.mdR(),
+          borderRadius: AppRadius.mdR,
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR(),
+          borderRadius: AppRadius.mdR,
           borderSide: const BorderSide(color: AppColors.hairline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR(),
+          borderRadius: AppRadius.mdR,
           borderSide: const BorderSide(color: AppColors.primaryPink, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR(),
+          borderRadius: AppRadius.mdR,
           borderSide: const BorderSide(color: AppColors.danger),
         ),
         errorStyle: const TextStyle(fontSize: 12.5),
@@ -176,7 +178,7 @@ abstract final class AppTheme {
         backgroundColor: AppColors.darkText,
         contentTextStyle: const TextStyle(color: AppColors.white, fontSize: 14),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR()),
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
         insetPadding: const EdgeInsets.all(16),
       ),
       dialogTheme: DialogThemeData(
@@ -273,6 +275,10 @@ abstract final class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.darkCanvas,
       canvasColor: AppColors.darkCanvas,
+      // `cardColor` and `canvasColor` are still real ThemeData fields (they are
+      // not redirected to the ColorScheme), so setting both keeps the dark
+      // canvas honest even for the few Material widgets that read them
+      // directly instead of `colorScheme.surface`.
       cardColor: AppColors.darkSurface,
       appBarTheme: lightTheme.appBarTheme.copyWith(
         iconTheme: const IconThemeData(color: AppColors.darkTextPrimary, size: 22),
@@ -292,7 +298,7 @@ abstract final class AppTheme {
         fillColor: AppColors.darkSurfaceAlt,
         hintStyle: const TextStyle(color: AppColors.darkTextSecondary, fontSize: 14.5),
         enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.mdR(),
+          borderRadius: AppRadius.mdR,
           borderSide: const BorderSide(color: AppColors.darkOutline),
         ),
       ),

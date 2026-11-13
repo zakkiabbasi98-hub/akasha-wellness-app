@@ -124,10 +124,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           const SizedBox(height: 10),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _Legend(color: AppColors.skyBlue, label: 'water logged'),
-                              const SizedBox(width: 14),
-                              _Legend(color: AppColors.success, label: 'goal met'),
+                            children: const [
+                              _Legend(
+                                color: AppColors.skyBlue,
+                                label: 'water logged',
+                              ),
+                              SizedBox(width: 14),
+                              _Legend(
+                                color: AppColors.success,
+                                label: 'goal met',
+                              ),
                             ],
                           ),
                           const SizedBox(height: 14),

@@ -138,12 +138,13 @@ ring, no photos, no ad-tech, no default Material 3 screens.
 
 | Tool | Version |
 |------|---------|
-| Flutter | stable **≥ 3.27** (Dart ≥ 3.6) — needed for `WidgetState*`, `withValues`, `CardThemeData` |
-| Android Studio | Ladybug (2024.2) or newer |
-| Android SDK | Platform 34, Build Tools 34 |
-| JDK | 17 (bundled with Android Studio) |
-| Gradle | 8.3 (via the wrapper) |
-| Min Android | 6.0 (API 23); target/compile 34 |
+| Flutter | stable **3.44** (Dart 3.12) — needed for `AppBarThemeData`/`InputDecorationThemeData`, `WidgetState*`, `withValues`, `CardThemeData` |
+| Android Studio | Ladybug (2024.2) or newer, with the **jbr-21** JDK |
+| Android SDK | Platform 36, Build Tools 36 |
+| JDK | **21** |
+| Gradle | **8.14** (via the wrapper) |
+| AGP / Kotlin | 8.11.1 / 2.2.20 (declared in `android/settings.gradle`; AGP stays below 9) |
+| Min Android | 6.0 (API 23); compile/target 36 |
 
 ---
 
@@ -357,8 +358,8 @@ policy-compliant alternative for each:
 
 | Symptom | Fix |
 |---|---|
-| `flutter pub get` fails | Check your Flutter version (`flutter --version` ≥ 3.27). |
-| Gradle fails on first build | Ensure JDK 17 is selected in Android Studio (*Settings → Build → Gradle → Gradle JDK*). |
+| `flutter pub get` fails | Check your Flutter version (`flutter --version`; this repo is built and pinned against **3.44 / Dart 3.12**). |
+| Gradle fails on first build | Ensure **JDK 21** is selected in Android Studio (*Settings → Build → Gradle → Gradle JDK*). The project is pinned to Gradle 8.14 / AGP 8.11.1 / Kotlin 2.2.20 / compileSdk 36. |
 | `minSdk` error from a plugin | Already set to 23; if a plugin demands higher, raise `minSdk` in `android/app/build.gradle`. |
 | No notifications | Settings → Diagnostics → grant notifications + exact alarms, then *Rebuild the whole schedule*. |
 | Reminders late | Battery optimisation is delaying them; use the *Fix* button in Diagnostics. |

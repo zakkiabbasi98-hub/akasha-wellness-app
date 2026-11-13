@@ -52,7 +52,7 @@ class SoftCard extends StatelessWidget {
         border: showBorder
             ? Border.all(
                 color: borderColor ??
-                    (isDark ? const AppColors.darkHairline : AppColors.hairline),
+                    (isDark ? AppColors.darkHairline : AppColors.hairline),
                 width: 1,
               )
             : null,
@@ -183,7 +183,7 @@ class SectionTile extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
-      borderRadius: AppRadius.mdR(),
+      borderRadius: AppRadius.mdR,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: dense ? 12 : 16,

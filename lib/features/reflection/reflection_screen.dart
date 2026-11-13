@@ -333,7 +333,7 @@ class _ReflectionScreenState extends ConsumerState<ReflectionScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.purple,
                     minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR()),
+                    shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
                   ),
                   child: const Text('Thank you'),
                 ),

@@ -152,10 +152,10 @@ void main() {
     test('a plain tap (no action button) is treated as already handled', () async {
       // Opening the app must never be queued as a failed action.
       final response = NotificationResponse(
-        notificationId: 1,
+        notificationResponseType: NotificationResponseType.selectedNotification,
+        id: 1,
         payload: const NotificationPayload(kind: 'water', slotMinute: 540)
             .encode(),
-        notificationResponseType: NotificationResponseType.selectedNotification,
       );
       final result = await BackgroundActionEngine.handle(response);
       expect(result, isTrue);
@@ -163,10 +163,10 @@ void main() {
 
     test('a payload-less response is rejected without throwing', () async {
       final response = NotificationResponse(
-        notificationId: 1,
-        actionId: '${AkashaActions.drankWater}',
         notificationResponseType:
             NotificationResponseType.selectedNotificationAction,
+        id: 1,
+        actionId: AkashaActions.drankWaterId,
       );
       final result = await BackgroundActionEngine.handle(response);
       expect(result, isFalse,

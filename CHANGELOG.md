@@ -30,7 +30,7 @@ is in [`docs/REPAIR_CHANGELOG.md`](docs/REPAIR_CHANGELOG.md).
   to alarm-clock apps. `SCHEDULE_EXACT_ALARM` is the correct permission, and a
   refused exact alarm now retries inexactly instead of being lost.
 * Restored `gradlew`, `gradlew.bat` and `gradle-wrapper.jar` from the official
-  Gradle `v8.3.0` release (the version paired with AGP 8.1.0).
+  Gradle `v8.14.0` release (the version paired with AGP 8.11.1).
 * `TimeChangeReceiver` now also handles boot and package-replacement, and re-arms
   native spoken reminders without waiting for Dart.
 * Changing the glass sizes or the voice setting did not reschedule, so

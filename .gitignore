@@ -17,7 +17,10 @@ coverage/
 android/.gradle/
 # NOTE: android/gradle/wrapper/gradle-wrapper.jar IS committed on purpose.
 # Android Studio and `flutter build` require it, and a checkout without it
-# cannot build. It is a 63 KB official Gradle file, not a generated artefact.
+# cannot build. It is a 44 KB official Gradle file (taken unmodified from the
+# Gradle 8.14.0 source distribution, md5 15a2cd45cb049056c465b481d6eabb3c),
+# not a generated artefact. Keep it in step with
+# android/gradle/wrapper/gradle-wrapper.properties.
 android/local.properties
 android/app/debug/
 android/app/profile/

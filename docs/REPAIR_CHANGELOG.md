@@ -306,17 +306,23 @@ release tag — not a fabricated or hand-assembled file.
 
 | Component | Version | Constraint |
 |---|---|---|
-| Android Gradle Plugin | 8.1.0 (`settings.gradle`) | requires Gradle ≥ 8.0, JDK 17 |
-| Gradle | 8.3 (`gradle-wrapper.properties`) | satisfies AGP 8.1 |
-| Kotlin plugin | 1.9.10 | the version Flutter 3.16–3.24 templates use |
-| `compileSdk` / `targetSdk` | 34 | AGP 8.1 supports 34 |
+| Android Gradle Plugin | 8.11.1 (`settings.gradle`) | requires Gradle ≥ 8.13, JDK 17–21 |
+| Gradle | 8.14 (`gradle-wrapper.properties`) | satisfies AGP 8.11.1 |
+| Kotlin plugin | 2.2.20 | the version AGP 8.11's Built-in Kotlin support expects |
+| `compileSdk` / `targetSdk` | 36 | AGP 8.11 supports 36 |
 | `minSdk` | 23 | unchanged |
 | Java/Kotlin target | 17 | required by AGP 8.x; desugaring enabled for `flutter_local_notifications` |
 
 `gradle-wrapper.properties` was switched from `-all` to `-bin` (≈80 MB smaller
 download; the `-all` distribution only adds sources and docs) and gained
-`networkTimeout` / `validateDistributionUrl`. `AGP`, Gradle and JDK were
-**not** upgraded beyond the known-good pairing.
+`networkTimeout` / `validateDistributionUrl`.
+
+> **Superseded in the toolchain-alignment pass:** the values in the table above
+> were the original pairing. The project now targets the toolchain the app is
+> actually built with — Gradle 8.14, AGP 8.11.1, Kotlin 2.2.20, JDK 21,
+> compileSdk/targetSdk 36 — and the wrapper JAR was re-exported from the
+> `v8.14.0` tag (md5 `15a2cd45cb049056c465b481d6eabb3c`). AGP is kept below 9
+> on purpose; see `docs/BUILD_AND_RELEASE.md` §1a.
 
 **Verified.** File presence, sizes, JAR internals and script shebang were checked.
 `./gradlew --version` was **not** run — there is no JDK in the repair
@@ -485,3 +491,150 @@ disagree, and only a device settles it".
 4. **Firestore rules have not been executed** (needs the emulator + JDK).
 5. **The Gradle wrapper has not been executed** (needs a JDK).
 6. **No device or emulator run.** See `docs/TESTING.md` §5 for the manual matrix.
+
+---
+
+# Pass 2 — toolchain alignment (build-log driven)
+
+**Trigger:** a real `flutter build apk --debug` from the user's machine, run with
+**Flutter 3.44.0 / Dart 3.12.0 / JDK 21 / Gradle 8.14 / AGP 8.11.1 / Kotlin
+2.2.x / Android SDK 36.1 / compileSdk 36** on a Samsung SM-A055F (Android 15).
+
+That log is the authority for this pass. Where it disagreed with what pass 1
+believed, the log won.
+
+> **Verification status is unchanged from pass 1.** This environment still has no
+> Flutter, Dart, JDK, Gradle or Android SDK (`flutter`, `dart`, `java`, `gradle`,
+> `sdkmanager`, `adb`, `kotlinc` are all absent). So:
+>
+> * ❌ `flutter pub get` — **not run**
+> * ❌ `flutter analyze` — **not run**
+> * ❌ `flutter test` — **not run**
+> * ❌ `flutter build apk --debug` — **not run**, therefore **no APK was produced
+>   here**
+> * ❌ nothing was run on the SM-A055F
+>
+> Every API signature used below was checked against the **real upstream source**
+> at the pinned version tag (GitHub), not from memory. Every claim about
+> Flutter's own Gradle requirements was checked against `flutter/flutter` at tag
+> `3.44.0`.
+
+## 1. Dependency combination chosen
+
+| Package | Pinned to | Why that version |
+|---|---|---|
+| `flutter_local_notifications` | `~17.2.4` | The build log's `uiLocalNotificationDateInterpretation` error proves 17.x is what resolves. 17.x is the last line with **positional** `zonedSchedule` + a **required** `uiLocalNotificationDateInterpretation`; 19+ removed the argument and renamed everything. Rather than rewrite the whole notification layer, the code was made to match 17.x exactly. |
+| `timezone` | `~0.9.4` | 17.2.4 declares `timezone: ^0.9.0`. |
+| `share_plus` | `~12.0.2` | 10.x/11.x pin `kotlin_version 1.7.22` + AGP 8.3.1 inside their own `buildscript`; 13.x moves to `build.gradle.kts` and Flutter ≥3.38.1. 12.0.2 uses Kotlin 2.2.0/AGP 8.x and still exposes `SharePlus.instance.share(ShareParams(...))`. |
+
+## 2. Notification API corrected to 17.2.4 (verified against upstream source)
+
+| Was | Now | Note |
+|---|---|---|
+| `zonedSchedule(id, t, b, when, details, androidScheduleMode: …)` | `+ uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.wallClockTime` | Required positional-arg API in 17.x. Three call sites. |
+| `AndroidNotificationAction(AkashaActions.drankWater, …)` (int) | `AndroidNotificationAction(AkashaActions.drankWaterId, …)` (String) | In 17.x `AndroidNotificationAction.id` is a `String`. The int constants remain the logic ids; the `*Id` strings are derived from them (`'$drankWater'`), so they cannot drift. |
+| `NotificationResponse(notificationId: …, …)` | `NotificationResponse(notificationResponseType: …, id: …, …)` | There is no `notificationId` argument in any 17.x version. |
+| `android?.canUseFullScreenIntent()` | `SystemChannel().canUseFullScreenIntent()` | **No version of the plugin has this method.** Added to `MainActivity.kt` (`NotificationManager.canUseFullScreenIntent()`, API 34+, version-guarded). |
+| `android?.getNotificationChannel(id)` | `getNotificationChannels()` then filter | **No version has a single-channel getter.** Filtering a 5-element list is free. |
+
+`requestFullScreenIntentPermission()` (which *does* exist in 17.x) is kept and
+exposed as `requestFullScreenIntentsPermission()`.
+
+## 3. Dart compile errors fixed
+
+| File | Error | Fix |
+|---|---|---|
+| `lib/data/repositories/{water,medicine,mind,profile}_repository.dart` | `Transaction` / `ConflictAlgorithm` undefined | `import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Transaction;` |
+| `lib/app.dart` | `DateTime` compared with `int?` (native marker is epoch millis) | convert with `DateTime.fromMillisecondsSinceEpoch`, compare with `isBefore` |
+| `lib/features/medicine/add_medicine_screen.dart` | called a `hasDuplicateMinutes()` that no longer existed | re-added as `Validators.hasDuplicateMinutes` (set-based, so a duplicate anywhere is caught, not just neighbours) |
+| `lib/core/theme/app_theme.dart` | `AppRadius.mdR()` — `mdR` is a getter | 6 call sites → `AppRadius.mdR` |
+| `lib/features/{mind_soul/motivation,reflection/reflection,water/water}_screen.dart`, `lib/shared/widgets/soft_card.dart` | same | 4 call sites → `AppRadius.mdR` |
+| `lib/shared/widgets/app_nav.dart` (2 places) | `const AppColors.darkHairline` inside a conditional expression | dropped the `const` |
+| `lib/shared/widgets/app_nav.dart` | `const AppColors.deepPurple.withValues(...)` (method on a const) | dropped the `const` |
+| `lib/shared/widgets/soft_card.dart` | same const-in-conditional pattern | dropped the `const` |
+| `lib/shared/widgets/date_strip.dart` | `AppShadows` unresolved | added `import '../../core/theme/app_tokens.dart';` |
+| `lib/features/settings/sync_settings_screen.dart` | `SyncPhase` unresolved | added `import '../../features/sync/sync_service.dart';` |
+| `lib/features/calendar/calendar_screen.dart` | invalid `const` collection in the legend row | legend children are now a real `const` list |
+| `lib/core/theme/app_theme.dart` | `CupertinoPageTransitionsBuilder` unresolved | `import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;` |
+| `lib/core/theme/app_theme.dart` | `AppBarTheme` / `InputDecorationTheme` are `ThemeData` fields of the newer `*Data` types on Flutter 3.44 | switched to `AppBarThemeData` / `InputDecorationThemeData` (verified in `theme_data.dart` at tag `3.44.0`) |
+
+## 4. Android / Gradle configuration
+
+| Item | Was | Now |
+|---|---|---|
+| Gradle wrapper | 8.3 | **8.14** (`gradle-8.14-bin.zip`) |
+| Wrapper JAR / scripts | from Gradle 8.3.0 | re-taken from the official **8.14.0** source distribution (md5 `15a2cd45cb049056c465b481d6eabb3c`) |
+| AGP | 8.1.0 | **8.11.1** |
+| Kotlin plugin | 1.9.10 | **2.2.20** |
+| `compileSdk` | 34 | **36** |
+| `targetSdk` | 34 | **36** |
+| `minSdk` | 23 | 23 (unchanged — Flutter 3.44 errors below 23) |
+| `coreLibraryDesugaring` | `desugar_jdk_libs:2.0.4` | **2.1.5** |
+| Kotlin JVM target | `android { kotlinOptions { jvmTarget } }` | **`kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }`** — Kotlin 2.2 raises `kotlinOptions {}` to an **error** |
+| Java bytecode target | 17 | 17 (unchanged; JDK 21 is used to build it) |
+
+These are exactly the values Flutter 3.44.0's own `DependencyVersionChecker.kt`
+treats as *supported without warning* (`warnGradleVersion 8.14.0`,
+`warnAGPVersion 8.11.1`, `warnKGPVersion 2.2.20`, `errorJavaVersion 17`,
+`errorMinSdkVersion 23`). **AGP stays below 9** as required.
+
+### The Built-in Kotlin warning — deliberately not "fixed" in the app
+
+`android.builtInKotlin` is left at Flutter's default (`false`). Under AGP 8.11,
+turning it on makes Flutter stop applying `kotlin-android` while this app's
+`build.gradle` still declares it, which fails — and the plugins that trigger the
+warning (`firebase_*`, `share_plus`) would each need to migrate first. This is
+documented in `docs/BUILD_AND_RELEASE.md` §1a.
+
+## 5. Files changed in pass 2
+
+Dart (15): `lib/app.dart`, `lib/core/theme/app_theme.dart`,
+`lib/core/utils/validators.dart`, `lib/core/services/system_channel.dart`,
+`lib/core/notifications/notification_service.dart`,
+`lib/core/notifications/background_actions.dart`,
+`lib/data/repositories/water_repository.dart`,
+`lib/data/repositories/medicine_repository.dart`,
+`lib/data/repositories/mind_repository.dart`,
+`lib/data/repositories/profile_repository.dart`,
+`lib/features/calendar/calendar_screen.dart`,
+`lib/features/medicine/add_medicine_screen.dart`,
+`lib/features/mind_soul/motivation_screen.dart`,
+`lib/features/reflection/reflection_screen.dart`,
+`lib/features/water/water_screen.dart`,
+`lib/features/settings/diagnostics_screen.dart`,
+`lib/features/settings/sync_settings_screen.dart`,
+`lib/features/settings/settings_screen.dart`,
+`lib/shared/widgets/app_nav.dart`, `lib/shared/widgets/date_strip.dart`,
+`lib/shared/widgets/soft_card.dart` (16 files — all listed in `git status`)
+
+Kotlin (1): `android/app/src/main/kotlin/com/akasha/wellness/MainActivity.kt`
+(+`canUseFullScreenIntent`, +`openFullScreenIntentSettings`)
+
+Gradle/shell (6): `android/settings.gradle`, `android/app/build.gradle`,
+`android/gradle/wrapper/gradle-wrapper.properties`,
+`android/gradle/wrapper/gradle-wrapper.jar`, `android/gradlew`,
+`android/gradlew.bat`
+
+Package/config (2): `pubspec.yaml`, `.gitignore`
+
+Tests (3): `test/unit/notification_action_test.dart` (v17 response ctor),
+`test/unit/toolchain_contract_test.dart` (new), `test/unit/toolchain_config_test.dart` (new)
+
+Docs (5): `README.md`, `CHANGELOG.md`, `docs/BUILD_AND_RELEASE.md`,
+`docs/DEVELOPMENT_REPORT.md`, `docs/REPAIR_CHANGELOG.md`
+
+## 6. New tests (still not executed here)
+
+`test/unit/toolchain_contract_test.dart` — action-id wire format, the v17
+`NotificationResponse` constructor, `AndroidScheduleMode` values,
+`UILocalNotificationDateInterpretation`, `Validators.hasDuplicateMinutes`.
+
+`test/unit/toolchain_config_test.dart` — reads the real Gradle/manifest/Kotlin
+files and asserts: AGP < 9, wrapper = 8.14, Kotlin = 2.2.20, JAR is a real
+archive, `compileSdk`/`targetSdk` = 36, desugaring ≥ 2.1.5, **no
+`kotlinOptions` block**, `SCHEDULE_EXACT_ALARM` (not `USE_EXACT_ALARM`), the
+name of every method `SystemChannel` invokes exists in `MainActivity.kt`, and
+the three dependency pins.
+
+Total test files: 14 unit/widget/integration suites (~250 cases). **None of them
+has been run in this environment.**

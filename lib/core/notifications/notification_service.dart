@@ -3,17 +3,22 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../../content/motivation_content.dart';
 import '../constants/app_constants.dart';
+import '../services/system_channel.dart';
 import '../utils/date_utils.dart';
 import 'background_actions.dart';
 import 'notification_ids.dart';
 import 'notification_planner.dart';
-import 'spoken_reminders.dart';
 
-/// Action ids used by the notification buttons. These are the strings Android
-/// gives back in `NotificationResponse.actionId`; they are parsed as ints
-/// because the plugin delivers them as strings.
+/// Action ids used by the notification buttons.
+///
+/// Android hands these back in `NotificationResponse.actionId`, always as a
+/// **string** — flutter_local_notifications declares
+/// `AndroidNotificationAction.id` as a `String` and never converts it back. The
+/// integer constants below are the single source of truth for the app's logic
+/// (the switch statements in `background_actions.dart` and
+/// `action_controller.dart`); the `*Id` string constants are the wire format and
+/// are derived from the integers, so the two can never drift apart.
 abstract final class AkashaActions {
   static const int drankWater = 1;
   static const int skipWater = 2;
@@ -22,6 +27,18 @@ abstract final class AkashaActions {
   static const int skipMedicine = 11;
   static const int snoozeMedicine = 12;
   static const int openApp = 20;
+
+  /// The same ids as **strings**, because v17 of flutter_local_notifications
+  /// declares `AndroidNotificationAction.id` as a `String`. Keeping both forms
+  /// means the integer constants stay the single source of truth: the strings
+  /// are derived from them at compile time, so the two can never drift apart.
+  static const String drankWaterId = '$drankWater';
+  static const String skipWaterId = '$skipWater';
+  static const String snoozeWaterId = '$snoozeWater';
+  static const String tookMedicineId = '$tookMedicine';
+  static const String skipMedicineId = '$skipMedicine';
+  static const String snoozeMedicineId = '$snoozeMedicine';
+  static const String openAppId = '$openApp';
 
   static const String payloadWater = 'water';
   static const String payloadMedicine = 'medicine';
@@ -243,10 +260,18 @@ class NotificationService {
 
   /// Picks a tz-database zone whose current UTC offset matches the device's.
   ///
-  /// Reading the real IANA name needs an extra plugin, and every zone with the
-  /// same offset produces identical wall-clock instants — which is all that
-  /// scheduling needs. A DST change is handled by re-materialising the horizon
-  /// (on launch, on the native TIME_SET/TIMEZONE_CHANGED broadcast, and daily).
+  /// Every zone with the same offset produces identical *instants*, and every
+  /// scheduled alarm is first converted to a [tz.TZDateTime] in this zone and
+  /// then interpreted as wall-clock time by the plugin, so an alarm always
+  /// fires at the intended local minute. A DST shift is picked up because
+  /// [tz.setLocalLocation] is re-run on every cold start (the offset it reads
+  /// is the *current* one, which is the post-shift offset), and because the
+  /// horizon is re-materialised on launch, on the native
+  /// TIME_SET/TIMEZONE_CHANGED broadcast, and once a day while the app runs.
+  ///
+  /// `latest_all` is used for the timezone database (not the 20 KB `latest`),
+  /// so the full IANA list is available and the offset scan below usually finds
+  /// an exact named match rather than the `Etc/GMT` fallback.
   static String _zoneNameForOffset(DateTime now) {
     final offset = now.timeZoneOffset;
     if (offset == Duration.zero) return 'UTC';
@@ -342,16 +367,46 @@ class NotificationService {
   Future<bool> requestExactAlarmsPermission() async =>
       await _android?.requestExactAlarmsPermission() ?? false;
 
-  Future<bool> areFullScreenIntentsAllowed() async =>
-      await _android?.canUseFullScreenIntent() ?? false;
+  /// Whether Android currently lets AKASHA post a full-screen (alarm-style)
+  /// reminder over the lock screen.
+  ///
+  /// flutter_local_notifications v17 exposes **no** getter for this — only the
+  /// request. Rather than invent a method the plugin does not have, the answer
+  /// is derived from the system permission the platform actually gates it on:
+  /// `USE_FULL_SCREEN_INTENT` is a normal permission that is granted on install
+  /// up to Android 13 and can be revoked by the user from Android 14 onwards.
+  /// The native `system` channel in MainActivity answers it exactly.
+  Future<bool> areFullScreenIntentsAllowed() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    return const SystemChannel().canUseFullScreenIntent();
+  }
+
+  /// Asks Android for full-screen-intent permission.
+  ///
+  /// `requestFullScreenIntentPermission()` **is** part of the 17.x Android
+  /// implementation (it opens the per-app settings page on Android 14+), so
+  /// this is a real plugin call, not an invention. Its result means "the
+  /// settings screen was opened", so callers re-read
+  /// [areFullScreenIntentsAllowed] rather than trusting the bool.
+  Future<bool> requestFullScreenIntentsPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    return await _android?.requestFullScreenIntentPermission() ?? false;
+  }
 
   /// Current user-facing importance of a channel, or null when it does not
   /// exist yet. The diagnostics screen uses this to notice that the user
   /// downgraded water reminders to "silent" and stopped hearing them.
+  ///
+  /// v17 has no single-channel getter, so the full list is fetched and
+  /// filtered — the list is at most a handful of entries.
   Future<Importance?> channelImportance(String channelId) async {
     try {
-      final channel = await _android?.getNotificationChannel(channelId);
-      return channel?.importance;
+      final channels = await _android?.getNotificationChannels();
+      if (channels == null) return null;
+      for (final channel in channels) {
+        if (channel.id == channelId) return channel.importance;
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -387,6 +442,8 @@ class NotificationService {
         text.body,
         _toTz(alarm.when),
         details,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.wallClockTime,
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
@@ -406,6 +463,8 @@ class NotificationService {
           text.body,
           _toTz(alarm.when),
           details,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.wallClockTime,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           payload: payload,
         );
@@ -440,19 +499,19 @@ class NotificationService {
             icon: 'ic_stat_water',
             actions: const [
               AndroidNotificationAction(
-                AkashaActions.drankWater,
+                AkashaActions.drankWaterId,
                 'I drank water',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
-                AkashaActions.skipWater,
+                AkashaActions.skipWaterId,
                 'Skip',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
-                AkashaActions.snoozeWater,
+                AkashaActions.snoozeWaterId,
                 'Later',
                 showsUserInterface: false,
                 cancelNotification: true,
@@ -478,19 +537,19 @@ class NotificationService {
             styleInformation: BigTextStyleInformation(text.body),
             actions: const [
               AndroidNotificationAction(
-                AkashaActions.tookMedicine,
+                AkashaActions.tookMedicineId,
                 'I took it',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
-                AkashaActions.skipMedicine,
+                AkashaActions.skipMedicineId,
                 'Skip',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
-                AkashaActions.snoozeMedicine,
+                AkashaActions.snoozeMedicineId,
                 'Later',
                 showsUserInterface: false,
                 cancelNotification: true,
@@ -567,21 +626,25 @@ class NotificationService {
             styleInformation: BigTextStyleInformation(body),
             actions: [
               AndroidNotificationAction(
-                isMedicine ? AkashaActions.tookMedicine : AkashaActions.drankWater,
+                isMedicine
+                    ? AkashaActions.tookMedicineId
+                    : AkashaActions.drankWaterId,
                 isMedicine ? 'I took it' : 'I drank water',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
-                isMedicine ? AkashaActions.skipMedicine : AkashaActions.skipWater,
+                isMedicine
+                    ? AkashaActions.skipMedicineId
+                    : AkashaActions.skipWaterId,
                 'Skip',
                 showsUserInterface: false,
                 cancelNotification: true,
               ),
               AndroidNotificationAction(
                 isMedicine
-                    ? AkashaActions.snoozeMedicine
-                    : AkashaActions.snoozeWater,
+                    ? AkashaActions.snoozeMedicineId
+                    : AkashaActions.snoozeWaterId,
                 'Later',
                 showsUserInterface: false,
                 cancelNotification: true,
@@ -589,6 +652,8 @@ class NotificationService {
             ],
           ),
         ),
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.wallClockTime,
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,

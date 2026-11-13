@@ -532,10 +532,11 @@ class PendingActionQueue {
     for (final item in queued) {
       try {
         final response = NotificationResponse(
-          notificationId: 0,
+          notificationResponseType:
+              NotificationResponseType.selectedNotificationAction,
+          id: 0,
           actionId: (item['actionId'] as num?)?.toInt().toString(),
           payload: item['payload'] as String?,
-          notificationResponseType: NotificationResponseType.selectedNotificationAction,
         );
         if (await BackgroundActionEngine.handle(response)) applied++;
       } catch (e) {

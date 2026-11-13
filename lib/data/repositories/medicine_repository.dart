@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, Transaction;
+
 import '../../core/database/app_database.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/id.dart';

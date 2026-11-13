@@ -4,6 +4,10 @@ publish_to: "none"
 version: 1.1.0+2
 
 environment:
+  # Dart 3.12 ships with Flutter 3.44, which is the toolchain this app is built
+  # with. The lower bound stays at 3.6 so the source still compiles on older
+  # stable channels, but every dependency below is pinned to a version whose
+  # own constraints this toolchain satisfies.
   sdk: ">=3.6.0 <4.0.0"
 
 # NOTE ON DATABASE ENGINE
@@ -36,8 +40,19 @@ dependencies:
   shared_preferences: ^2.3.2
 
   # Notifications & alarms
-  flutter_local_notifications: ^17.2.3
-  timezone: ^0.9.4
+  #
+  # WHY 17.2.4 AND NOT 19/20/22: the 17.x line is the last that still takes
+  # `uiLocalNotificationDateInterpretation` and a positional `zonedSchedule`.
+  # 18+ renamed `AndroidFlutterLocalNotificationsPlugin.zonedSchedule`'s
+  # `scheduleMode` and 19+ removed that argument entirely, so every call site in
+  # lib/core/notifications/ is written against 17.x's API. Pinned with ~ so a
+  # future 17.3 cannot silently change the surface; the caret would let 17.x
+  # float, which is fine, but ~ pins the minor documented in docs here.
+  flutter_local_notifications: ~17.2.4
+  # 17.2.4 requires timezone ^0.9.0. 0.10 removed `TimeZone.timeZoneOffset`'s
+  # behaviour that the zone-matching code in NotificationService relies on, and
+  # its data-base API no longer matches `initializeTimeZones()`.
+  timezone: ~0.9.4
 
   # NOTE: flutter_tts was removed in the repair pass. Spoken reminders are
   # played by Android's own TextToSpeech engine from a native receiver, because
@@ -52,7 +67,11 @@ dependencies:
   # UI
   fl_chart: ^0.69.0
   http: ^1.2.2
-  share_plus: ^10.0.2
+  # 10.x still applies the legacy Kotlin Gradle Plugin and pins AGP 8.3.1 in
+  # its own buildscript, which conflicts with AGP 8.11.1 + Kotlin 2.2.20 here.
+  # 12.0.2 is the newest release that still declares `kotlin_version = 2.2.0`
+  # AND keeps the deprecated-but-present `Share.shareXFiles` entry point.
+  share_plus: ~12.0.2
   flutter_svg: ^2.0.10+1
   intl: ^0.19.0
 

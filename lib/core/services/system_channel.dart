@@ -60,6 +60,27 @@ class SystemChannel {
     }
   }
 
+  /// Whether Android currently permits AKASHA to post a full-screen,
+  /// alarm-style reminder over the lock screen.
+  ///
+  /// On Android 14+ this is a runtime-granted permission
+  /// (`NotificationManager.canUseFullScreenIntent()`); before that it is
+  /// granted at install time as long as the manifest declares
+  /// `USE_FULL_SCREEN_INTENT`.
+  Future<bool> canUseFullScreenIntent() async {
+    try {
+      return await _channel.invokeMethod<bool>('canUseFullScreenIntent') ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Opens the official "Full-screen notifications" settings page (Android 14+).
+  Future<void> openFullScreenIntentSettings() =>
+      _safe('openFullScreenIntentSettings');
+
   Future<void> openNotificationSettings() => _safe('openNotificationSettings');
 
   Future<void> openAppSettings() => _safe('openAppSettings');

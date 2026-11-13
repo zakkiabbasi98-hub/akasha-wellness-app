@@ -13,27 +13,81 @@ needs is present.
 
 | Component | Required | Why |
 |---|---|---|
-| Flutter | stable **≥ 3.27** | `WidgetStateProperty`, `Color.withValues`, `CardThemeData`, `TextScaler.clamp` |
+| Flutter | stable **3.44.x** (Dart 3.12) | `AppBarThemeData` / `InputDecorationThemeData` in `ThemeData`, `CardThemeData`, `TextScaler.clamp` |
 | Dart | ≥ 3.6 | pinned in `pubspec.yaml` (`sdk: ">=3.6.0 <4.0.0"`) |
-| JDK | **17** | AGP 8.1 + `coreLibraryDesugaring` |
-| Gradle | 8.3 (wrapper) | AGP 8.1.0 requires ≥ 8.0 |
-| AGP | 8.1.0 | declared in `android/settings.gradle` |
-| Kotlin | 1.9.10 | declared in `android/settings.gradle` |
-| Android SDK Platform | **34** | `compileSdk = 34` |
-| Build Tools | 34.0.0 | |
-| minSdk | 23 (Android 6.0) | |
-| targetSdk | 34 (Android 14) | |
+| JDK | **21** | AGP 8.11.1 runs on 17–21; the bytecode target stays at 17 (Java 17 is the minimum Flutter 3.44 accepts) |
+| Gradle | **8.14** (wrapper) | Flutter 3.44 warns below 8.14.0; AGP 8.11.1 needs ≥ 8.13 |
+| AGP | **8.11.1** | declared in `android/settings.gradle` |
+| Kotlin | **2.2.20** | declared in `android/settings.gradle` |
+| Android SDK Platform | **36** | `compileSdk = 36` |
+| Build Tools | 36.0.0 | |
+| minSdk | 23 (Android 6.0) | accepted by Flutter 3.44 (error < 23, warning < 24) |
+| targetSdk | 36 (Android 16) | |
+
+Those numbers are not guesses. Flutter 3.44.0's own Gradle plugin
+(`packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt`)
+hard-codes these thresholds:
+
+| Check | Error below | Warning below | This project |
+|---|---|---|---|
+| Gradle | 8.7.0 | **8.14.0** | **8.14** — no warning |
+| AGP | 8.6.0 | **8.11.1** | **8.11.1** — no warning |
+| Kotlin (KGP) | 2.0.0 | **2.2.20** | **2.2.20** — no warning |
+| Java (Gradle JDK) | 17 | 17 | **21** — no warning |
+| minSdk | 23 | 24 | **23** — no warning |
+
+AGP is deliberately kept **below 9**: AGP 9 forces Flutter's Built-in Kotlin,
+and several plugins in this graph (share_plus 12, firebase_*) still apply the
+Kotlin Gradle Plugin themselves — that combination does not build yet.
+
+**Kotlin DSL note.** Kotlin 2.2 turned the `android { kotlinOptions { } }` block
+into an *error* ("Please migrate to the compilerOptions DSL"). This project
+therefore uses the top-level `kotlin { compilerOptions { jvmTarget = ... } }`
+block in `android/app/build.gradle` instead. If you see that error after
+editing the build files, the old block has crept back in.
 
 Check it:
 
 ```bash
 flutter --version
 flutter doctor -v
-java -version        # expect 17.x
+java -version        # expect 21.x
 ```
 
-If `java -version` is not 17: Android Studio → *Settings → Build, Execution,
-Deployment → Build Tools → Gradle → Gradle JDK* → select the bundled **jbr-17**.
+If `java -version` is not 21: Android Studio → *Settings → Build, Execution,
+Deployment → Build Tools → Gradle → Gradle JDK* → select the bundled **jbr-21**.
+
+### 1a. About the "Built-in Kotlin" warning
+
+`flutter build` may print:
+
+```
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): ...
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+```
+
+That warning is about *plugins*, not this app, and it is informational on
+Flutter 3.44 (the default is `android.builtInKotlin=false`). Do **not** add
+`android.builtInKotlin=true` to `android/gradle.properties` to silence it:
+under AGP 8.11 that flag makes the Flutter Gradle plugin stop applying
+`kotlin-android` while the app's own `android/app/build.gradle` still declares
+`id "kotlin-android"`, and the build then fails. The fix belongs upstream in
+the plugins; this repository will migrate when they do.
+
+### 1b. About the share_plus compatibility note
+
+`share_plus` is pinned to `12.0.2` because that is where its own buildscript
+stops fighting this project's Gradle files:
+
+| share_plus | Its `android/build.gradle(.kts)` declares | Verdict |
+|---|---|---|
+| 10.x – 11.x | `kotlin_version 1.7.22`, `AGP 8.3.1`, `apply plugin: 'kotlin-android'` | Too old next to Kotlin 2.2.20 / AGP 8.11.1 |
+| **12.0.2** | `kotlin_version 2.2.0`, `AGP 8.12.1`, `apply plugin: 'kotlin-android'` | **Chosen** — AGP 8.x compatible |
+| 13.x+ | `build.gradle.kts`, requires Flutter ≥ 3.38.1 | Migrated to the Built-in Kotlin guard; a bigger jump than this repair needs |
+
+12.0.2 still exposes `SharePlus.instance.share(ShareParams(...))`, which is what
+`lib/features/settings/settings_screen.dart` now calls (the older
+`Share.shareXFiles` entry point is deprecated there and is slated for removal).
 
 ---
 

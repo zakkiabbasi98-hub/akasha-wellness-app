@@ -222,7 +222,7 @@ lib/
 | `firebase/firestore.rules` | Owner-only, allow-listed entities, default deny |
 | `firebase/firestore.indexes.json` | Composite indexes for sync queries |
 | `firebase/firebase.json`, `firebase/functions/{index.js,package.json}`, `firebase/README.md` | Optional backend |
-| `android/` | Gradle 8.3 / AGP 8.1.0 / Kotlin 1.9.10, minSdk 23, target 34, desugaring, manifest, `MainActivity.kt` (system channel), `TimeChangeReceiver.kt`, launch gradient, launcher icons, 2 custom status icons |
+| `android/` | Gradle 8.14 / AGP 8.11.1 / Kotlin 2.2.20, minSdk 23, target 36, desugaring, manifest, `MainActivity.kt` (system channel), `TimeChangeReceiver.kt`, launch gradient, launcher icons, 2 custom status icons |
 | `assets/` | logo mark + READMEs explaining how to add fonts/sounds/animations |
 | `test/`, `integration_test/` | 9 files, 140 test cases (222 after the repair pass) |
 

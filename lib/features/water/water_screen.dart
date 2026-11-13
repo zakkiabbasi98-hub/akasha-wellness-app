@@ -463,7 +463,7 @@ class _LogTile extends ConsumerWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_horiz_rounded,
                   size: 18, color: AppColors.secondaryText),
-              shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR()),
+              shape: RoundedRectangleBorder(borderRadius: AppRadius.mdR),
               onSelected: (value) async {
                 if (value == 'delete') {
                   final ok = await showAkashaConfirm(

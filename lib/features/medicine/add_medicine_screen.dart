@@ -361,7 +361,7 @@ class _AddMedicineScreenState extends ConsumerState<AddMedicineScreen> {
       );
       return;
     }
-    if (hasDuplicateMinutes(_times)) {
+    if (Validators.hasDuplicateMinutes(_times)) {
       showAkashaToast(
         context,
         'Two reminder times are the same. Please adjust them.',

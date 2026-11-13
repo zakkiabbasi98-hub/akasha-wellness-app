@@ -81,10 +81,15 @@ class _AkashaAppState extends ConsumerState<AkashaApp>
 
     // 4. Even after a short absence, honour a clock/timezone change that the
     //    native receiver recorded while we were away.
-    final changeAt = await ref.read(systemChannelProvider).consumeRescheduleRequest();
+    final changeAtMillis =
+        await ref.read(systemChannelProvider).consumeRescheduleRequest();
     final last = _lastScheduledAt;
-    if (changeAt != null && (last == null || changeAt >= last)) {
-      await _rebuildSchedule();
+    if (changeAtMillis != null) {
+      final changeAt =
+          DateTime.fromMillisecondsSinceEpoch(changeAtMillis);
+      if (last == null || !changeAt.isBefore(last)) {
+        await _rebuildSchedule();
+      }
     }
   }
 

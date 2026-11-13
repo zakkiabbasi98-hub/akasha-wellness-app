@@ -49,4 +49,17 @@ abstract final class Validators {
     if (v.trim().length > 120) return 'That is a bit long';
     return null;
   }
+
+  /// True when two reminder times in [minutes] are the same minute of day.
+  ///
+  /// Two doses scheduled for the same minute would both ask "I took it" for a
+  /// time the user cannot tell apart, so the form refuses to save the duplicate
+  /// rather than creating a reminder she can never answer correctly.
+  static bool hasDuplicateMinutes(Iterable<int> minutes) {
+    final seen = <int>{};
+    for (final m in minutes) {
+      if (!seen.add(m)) return true;
+    }
+    return false;
+  }
 }
